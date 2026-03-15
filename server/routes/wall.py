@@ -1,5 +1,13 @@
+"""
+Wall-Route (Fly-Modus): Live-Anzeige des Local-browser-based-Photo-Frame.
+
+- GET /: Wall-HTML (Fly-Modus) oder leitet zu Grid weiter
+- WebSocket /ws: Empfängt neue Dateinamen, sendet __config_updated__
+- API: /api/config, /api/images, /api/upload_url
+- Enthält die komplette Wall-Logik: Slideshow, Center Highlight, Cache, Wake Lock
+"""
 from fastapi import APIRouter, WebSocket
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 import os
 import json
 import time
@@ -7,17 +15,18 @@ import time
 from server.main import PROJECT_DIR
 from server.network import get_upload_url
 from server import stats
+from server.routes.wall_grid import get_grid_html
 
 router = APIRouter()
 
-clients = []
+clients = []  # WebSocket-Clients (Wall-Anzeigen)
 
 UPLOAD_FOLDER = os.path.join(PROJECT_DIR, "media")
 CONFIG_FILE = os.path.join(PROJECT_DIR, "config.json")
 
 
 # ------------------------------------------------
-# Broadcast helpers
+# Broadcast: neue Datei an alle Wall-Clients
 # ------------------------------------------------
 
 async def broadcast(filename):
@@ -34,16 +43,15 @@ async def broadcast(filename):
         clients.remove(d)
 
 
-async def broadcast_config():
-
-    dead=[]
-
+async def broadcast_config(reload_full: bool = False):
+    """Broadcast to wall clients. reload_full=True only when wall_view_mode changed."""
+    msg = "__config_reload__" if reload_full else "__config_updated__"
+    dead = []
     for ws in clients:
         try:
-            await ws.send_text("__config_reload__")
+            await ws.send_text(msg)
         except:
             dead.append(ws)
-
     for d in dead:
         clients.remove(d)
 
@@ -104,28 +112,61 @@ def list_images():
 @router.get("/api/config")
 def get_config():
 
-    with open(CONFIG_FILE,"r") as f:
+    with open(CONFIG_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
 @router.post("/api/config")
-async def save_config(config:dict):
+async def save_config(config: dict):
+    old_view = None
+    try:
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            old = json.load(f)
+            old_view = old.get("wall_view_mode")
+    except Exception:
+        pass
+    new_view = config.get("wall_view_mode")
+    view_changed = old_view != new_view
 
-    with open(CONFIG_FILE,"w") as f:
-        json.dump(config,f,indent=4)
+    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=4)
 
-    await broadcast_config()
-
-    return {"status":"saved"}
+    await broadcast_config(reload_full=view_changed)
+    return {"status": "saved", "view_changed": view_changed}
 
 
 # ------------------------------------------------
 # Wall Page
 # ------------------------------------------------
 
-@router.get("/wall",response_class=HTMLResponse)
-def wall():
+def _load_config():
+    try:
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
 
+
+@router.get("/wall/grid", response_class=HTMLResponse)
+def wall_grid():
+    """Grid-Ansicht unter /wall/grid zum Testen."""
+    return Response(
+        content=get_grid_html(),
+        media_type="text/html",
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate"}
+    )
+
+
+@router.get("/wall", response_class=HTMLResponse)
+def wall():
+    """Wall: Fly oder Grid je nach config.wall_view_mode."""
+    config = _load_config()
+    if config.get("wall_view_mode") == "grid":
+        return Response(
+            content=get_grid_html(),
+            media_type="text/html",
+            headers={"Cache-Control": "no-store, no-cache, must-revalidate"}
+        )
     return """
 
 <!DOCTYPE html>
@@ -209,6 +250,29 @@ z-index:100;
 display:block;
 width:100%;
 height:auto;
+}
+
+.photoFrame.from-cache{
+outline:4px solid #ff6600;
+outline-offset:3px;
+box-shadow:0 0 16px rgba(255,102,0,0.8);
+z-index:150;
+}
+
+.frameDebugFilename{
+position:absolute;
+bottom:4px;
+left:4px;
+right:4px;
+font-size:10px;
+color:#fff;
+background:rgba(0,0,0,0.8);
+padding:2px 6px;
+text-align:center;
+overflow:hidden;
+text-overflow:ellipsis;
+white-space:nowrap;
+z-index:10;
 }
 
 .photoComment{
@@ -338,12 +402,28 @@ let currentCenterHighlights=0
 let wallStartTime = Date.now()
 
 let debugLogs=[]
+let reservedImages=new Set()
+let reservedVideos=new Set()
+
+let serverStateChannel=null
+let serverOnline=true
+let cachedImages=new Set()
+let wakeLockSentinel=null
+let wakeLockActive=false
+let altWakeLockVideo=null
+let altWakeLockCanvas=null
+let altWakeLockActive=false
+let altWakeLockTick=null
+let lastConnectionBroadcast=0
+const CONNECTION_BROADCAST_DEBOUNCE_MS=500
 
 function setConnection(state){
 
 let icon=document.getElementById("connectionStatus")
 
 if(!icon) return
+
+serverOnline=state==="online"
 
 if(state==="online"){
 
@@ -353,11 +433,21 @@ setTimeout(()=>{
 icon.style.opacity=0
 },5000)
 
+processHighlightQueue()
+
 }else{
 
 icon.style.opacity=1
 icon.style.background="red"
 
+}
+
+if(config&&config.cache_enabled){
+if(!serverStateChannel) serverStateChannel=new BroadcastChannel("wall-server-state")
+const now=Date.now()
+if(now-lastConnectionBroadcast<CONNECTION_BROADCAST_DEBOUNCE_MS) return
+lastConnectionBroadcast=now
+serverStateChannel.postMessage({state:state})
 }
 
 }
@@ -366,6 +456,7 @@ const imageTypes=["jpg","jpeg","png","webp","gif"]
 const videoTypes=["mp4","mov","webm"]
 
 let ws=null
+let reconnectTimeout=null
 
 function connectWebSocket(){
 
@@ -383,8 +474,11 @@ sendStats()
 ws.onclose = () => {
 
 setConnection("offline")
-
-setTimeout(connectWebSocket,3000)
+if(reconnectTimeout) clearTimeout(reconnectTimeout)
+reconnectTimeout=setTimeout(()=>{
+reconnectTimeout=null
+connectWebSocket()
+},3000)
 
 }
 
@@ -401,16 +495,58 @@ try{ ws.send(JSON.stringify({type:"stats",images:currentImages,videos:currentVid
 }
 setInterval(sendStats,5000)
 
+function markFromCache(file){
+if(!config.debug_overlay) return
+const fn=(file||"").split("?")[0]
+function tryMark(){
+document.querySelectorAll(".photoFrame[data-file]").forEach(f=>{
+if((f.dataset.file||"").split("?")[0]===fn) f.classList.add("from-cache")
+})
+}
+tryMark()
+setTimeout(tryMark,100)
+setTimeout(tryMark,400)
+}
+let lastCacheLog={}
+const CACHE_LOG_DEBOUNCE_MS=1000
+if("serviceWorker"in navigator){
+navigator.serviceWorker.addEventListener("message",e=>{
+if(e.data&&e.data.type==="cache_serve"){
+const key="serve:"+e.data.file
+if(Date.now()-(lastCacheLog[key]||0)<CACHE_LOG_DEBOUNCE_MS) return
+lastCacheLog[key]=Date.now()
+addDebugLog("Cache geladen: "+e.data.file+(e.data.expired?" (abgelaufen)":""))
+cachedImages.add((e.data.file||"").split("?")[0])
+markFromCache(e.data.file)
+}else if(e.data&&e.data.type==="cache_store"){
+const key="store:"+e.data.file
+if(Date.now()-(lastCacheLog[key]||0)<CACHE_LOG_DEBOUNCE_MS) return
+lastCacheLog[key]=Date.now()
+addDebugLog("Cache gespeichert: "+e.data.file)
+cachedImages.add((e.data.file||"").split("?")[0])
+}else if(e.data&&e.data.type==="cache_list"){
+const list=e.data.files||[]
+list.forEach(f=>cachedImages.add((f||"").split("?")[0]))
+if(config.debug_overlay&&list.length>0){
+const key="cache_list"
+if(Date.now()-(lastCacheLog[key]||0)<CACHE_LOG_DEBOUNCE_MS) return
+lastCacheLog[key]=Date.now()
+addDebugLog("Cache-Liste: "+list.length+" Bilder verfügbar")
+}
+}
+})
+}
 ws.onmessage=async(event)=>{
 
 let msg=event.data
 
 if(msg==="__config_reload__"){
-
-await loadConfig()
-setupQR()
+location.reload()
 return
-
+}
+if(msg==="__config_updated__"){
+await loadConfig()
+return
 }
 
 addMedia(msg)
@@ -450,6 +586,9 @@ function updateDebug(){
 
 let box=document.getElementById("debugOverlay")
 
+document.body.classList.toggle("debug-mode",!!config.debug_overlay)
+document.querySelectorAll(".frameDebugFilename").forEach(el=>{el.style.display=config.debug_overlay?"block":"none"})
+
 if(!config.debug_overlay){
 box.style.display="none"
 return
@@ -457,12 +596,23 @@ return
 
 box.style.display="block"
 
+let cacheOn=config.cache_enabled?"aktiv":"aus"
+let cacheTtl=config.cache_ttl_minutes||30
+let wakeLockEnabled=config.screen_wake_lock_enabled
+let altWakeEnabled=config.screen_wake_lock_alternative
+let wakeLockStatus="aus"
+if(wakeLockEnabled&&wakeLockActive) wakeLockStatus="aktiv (Wake Lock)"
+else if(altWakeEnabled&&altWakeLockActive) wakeLockStatus="aktiv (Alternative)"
+else if(wakeLockEnabled) wakeLockStatus="aktiv (Wake Lock, API nicht verfügbar)"
+else if(altWakeEnabled) wakeLockStatus="aktiv (Alternative, nicht verfügbar)"
 box.innerHTML =
 "Images: "+currentImages+" (max: "+config.max_images_on_screen+")<br>"+
 "Videos: "+currentVideos+" (max: "+config.max_videos_on_screen+")<br>"+
 "ImageHighlights: "+currentImageHighlights+" (Queue: "+imageHighlightQueue.length+")<br>"+
 "VideoHighlights: "+currentVideoHighlights+" (Queue: "+videoHighlightQueue.length+")<br>"+
-"CenterHighlights: "+currentCenterHighlights
+"CenterHighlights: "+currentCenterHighlights+"<br>"+
+"Cache: "+cacheOn+(config.cache_enabled?" (TTL "+cacheTtl+"min)":"")+"<br>"+
+"Bildschirm wach: "+wakeLockStatus
 
 if(debugLogs.length){
 box.innerHTML += "<br>Log:<br>"+debugLogs.join("<br>")
@@ -476,6 +626,8 @@ if(!config.debug_overlay) return
 
 let elapsed = ((Date.now()-wallStartTime)/1000).toFixed(1)
 let line = "["+elapsed+"s] "+msg
+
+if(debugLogs.length>0&&debugLogs[debugLogs.length-1].replace(/\[\d+\.\d+s\] /,"")===msg) return
 
 debugLogs.push(line)
 if(debugLogs.length>10) debugLogs.shift()
@@ -496,6 +648,23 @@ for(let f of files) addMedia(f)
 
 
 
+async function updateCacheSw(){
+if(config.cache_enabled&&"serviceWorker"in navigator){
+try{
+await navigator.serviceWorker.register("/sw.js?t="+Date.now(),{scope:"/"})
+addDebugLog("Cache SW registriert (TTL "+(config.cache_ttl_minutes||30)+"min)")
+console.log("[WALL] Cache SW registriert")
+}catch(e){ addDebugLog("Cache SW Fehler: "+e.message); console.error("[WALL] Cache SW:",e) }
+}else if("serviceWorker"in navigator){
+try{
+let regs=await navigator.serviceWorker.getRegistrations()
+for(let r of regs) await r.unregister()
+addDebugLog("Cache SW deaktiviert")
+console.log("[WALL] Cache SW deaktiviert")
+}catch(e){}
+}
+}
+
 async function loadConfig(){
 
 let res=await fetch("/api/config")
@@ -506,9 +675,11 @@ if(qrTimer) clearInterval(qrTimer)
 if(bannerTimer) clearInterval(bannerTimer)
 
 applyFrameStyle()
+applyBackground()
 loadCommentFont()
 setupQR()
 setupBanner()
+await updateCacheSw()
 
 // Slideshow-Timer nach Config-Änderung neu starten
 imageSlideshowTimer = setInterval(showRandomImage,config.image_spawn_interval*1000)
@@ -534,6 +705,87 @@ padding:${config.frame_padding_top||0}px ${config.frame_padding_side||0}px ${con
 
 document.head.appendChild(style)
 
+}
+
+async function applyWakeLock(){
+let enabled=config.screen_wake_lock_enabled
+let altEnabled=config.screen_wake_lock_alternative
+
+if(!altEnabled){
+if(altWakeLockVideo){ altWakeLockVideo.pause(); altWakeLockVideo.srcObject=null; altWakeLockVideo.remove(); altWakeLockVideo=null }
+if(altWakeLockCanvas){ altWakeLockCanvas.remove(); altWakeLockCanvas=null }
+if(altWakeLockTick){ cancelAnimationFrame(altWakeLockTick); altWakeLockTick=null }
+altWakeLockActive=false
+}
+
+if(!enabled){
+if(wakeLockSentinel){ try{ await wakeLockSentinel.release() }catch(e){} wakeLockSentinel=null }
+wakeLockActive=false
+}else{
+if(!navigator.wakeLock){ wakeLockActive=false }
+else if(document.visibilityState==="visible"){
+try{
+wakeLockSentinel=await navigator.wakeLock.request("screen")
+wakeLockActive=true
+wakeLockSentinel.addEventListener("release",()=>{ wakeLockActive=false })
+}catch(e){ wakeLockActive=false }
+}
+}
+
+if(altEnabled&&typeof HTMLCanvasElement!=="undefined"&&HTMLCanvasElement.prototype.captureStream){
+if(altWakeLockVideo) return
+try{
+let canvas=document.createElement("canvas")
+canvas.width=2
+canvas.height=2
+canvas.style.cssText="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;"
+document.body.appendChild(canvas)
+let ctx=canvas.getContext("2d")
+let stream=canvas.captureStream(1)
+let video=document.createElement("video")
+video.srcObject=stream
+video.muted=true
+video.autoplay=true
+video.playsInline=true
+video.setAttribute("playsinline","")
+video.style.cssText="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;"
+document.body.appendChild(video)
+video.play().catch(()=>{})
+altWakeLockVideo=video
+altWakeLockCanvas=canvas
+altWakeLockActive=true
+function tick(){
+if(!altWakeLockCanvas) return
+ctx.fillStyle="#000"
+ctx.fillRect(0,0,2,2)
+altWakeLockTick=requestAnimationFrame(tick)
+}
+tick()
+}catch(e){ altWakeLockActive=false }
+}
+}
+document.addEventListener("visibilitychange",async()=>{
+if(document.visibilityState==="visible"&&config.screen_wake_lock_enabled&&navigator.wakeLock){
+try{
+wakeLockSentinel=await navigator.wakeLock.request("screen")
+wakeLockActive=true
+wakeLockSentinel.addEventListener("release",()=>{ wakeLockActive=false })
+}catch(e){ wakeLockActive=false }
+}
+})
+
+function applyBackground(){
+let mode=config.background_mode||"color"
+if(mode==="image"&&config.background_image){
+document.body.style.background="#000"
+document.body.style.backgroundImage="url(/background/"+encodeURIComponent(config.background_image)+")"
+document.body.style.backgroundSize="cover"
+document.body.style.backgroundPosition="center"
+document.body.style.backgroundRepeat="no-repeat"
+}else{
+document.body.style.background=config.background_color||"#000000"
+document.body.style.backgroundImage=""
+}
 }
 
 
@@ -758,6 +1010,7 @@ banner.style.opacity=0
 function processHighlightQueue(){
 
 if(highlightWorkerRunning) return
+if(!serverOnline) return
 
 highlightWorkerRunning=true
 
@@ -802,18 +1055,38 @@ highlightWorkerRunning=false
 
 
 
-function chooseRandomImage(){
-
-if(images.length===0) return null
-return images[Math.floor(Math.random()*images.length)]
-
+function getDisplayedMedia(){
+let files=new Set()
+document.querySelectorAll(".photoFrame[data-file]").forEach(f=>{ let v=f.dataset.file; if(v) files.add(v) })
+return files
 }
-
+function chooseRandomImage(){
+if(images.length===0) return null
+let displayed=getDisplayedMedia()
+let pool=images
+if(config.cache_enabled&&!serverOnline&&cachedImages.size>0){
+pool=images.filter(f=>cachedImages.has(f.split("?")[0]))
+if(pool.length===0) return null
+}
+let available=pool.filter(f=>!displayed.has(f)&&!reservedImages.has(f))
+if(available.length===0) return null
+let chosen=available[Math.floor(Math.random()*available.length)]
+reservedImages.add(chosen)
+return chosen
+}
 function chooseRandomVideo(){
-
 if(videos.length===0) return null
-return videos[Math.floor(Math.random()*videos.length)]
-
+let displayed=getDisplayedMedia()
+let pool=videos
+if(config.cache_enabled&&!serverOnline&&cachedImages.size>0){
+pool=videos.filter(f=>cachedImages.has(f.split("?")[0]))
+if(pool.length===0) return null
+}
+let available=pool.filter(f=>!displayed.has(f)&&!reservedVideos.has(f))
+if(available.length===0) return null
+let chosen=available[Math.floor(Math.random()*available.length)]
+reservedVideos.add(chosen)
+return chosen
 }
 
 
@@ -859,13 +1132,9 @@ if(isVideo){
 
 if(currentVideos>=config.max_videos_on_screen) return
 
-currentVideos++
-
 }else{
 
 if(currentImages>=config.max_images_on_screen) return
-
-currentImages++
 
 }
 
@@ -874,6 +1143,7 @@ addDebugLog("spawn "+(isVideo?"video":"image")+": "+file)
 
 let frame=document.createElement("div")
 frame.classList.add("photoFrame")
+frame.dataset.file=file
 
 let cfg=isVideo?{
 drift_strength:config.video_drift_strength,
@@ -935,6 +1205,7 @@ if(
     // Positionsbasierter Exit nur für Bilder, nicht für Videos
     if(!isVideo){
 
+        reservedImages.delete(file)
         frame.remove()
         currentImages--
 
@@ -1062,6 +1333,7 @@ if(
 ){
 
     // Positionsbasierter Exit jetzt für Bilder und Videos
+    if(videoTypes.includes(ext)) reservedVideos.delete(file); else reservedImages.delete(file)
     frame.remove()
 
     if(!videoTypes.includes(ext)) currentImages = Math.max(0, currentImages-1)
@@ -1103,7 +1375,13 @@ if(videoCanPlayHandled) return
 videoCanPlayHandled=true
 
 frame.appendChild(element)
+let dbgV=document.createElement("div")
+dbgV.className="frameDebugFilename"
+dbgV.textContent=file
+dbgV.style.display=config.debug_overlay?"block":"none"
+frame.appendChild(dbgV)
 document.body.appendChild(frame)
+currentVideos++
 
 element.play()
 
@@ -1128,11 +1406,11 @@ frame.style.boxShadow="0 0 60px "+cfg.highlight_color
 
 if(useCenterHighlight){
 
-let entryMs=(config.center_highlight_entry_speed||1)*1000
-let exitMs=(config.center_highlight_exit_speed||1)*1000
+let entryMs=Math.max(50,(config.center_highlight_entry_speed||1)*1000)
+let exitMs=Math.max(50,(config.center_highlight_exit_speed||1)*1000)
 let centerDur=config.center_highlight_duration*1000
 let mode=config.center_highlight_mode||"fly"
-
+if(config.debug_overlay) addDebugLog("center entry="+entryMs+"ms exit="+exitMs+"ms (from config)")
 frame.style.transition="opacity "+entryMs+"ms ease"
 requestAnimationFrame(()=>{ frame.style.opacity="1" })
 
@@ -1143,6 +1421,7 @@ if(mode==="spotlight"){
 frame.style.transition="opacity "+exitMs+"ms ease"
 frame.style.opacity="0"
 setTimeout(()=>{
+reservedVideos.delete(file)
 frame.remove()
 currentCenterHighlights=Math.max(0,currentCenterHighlights-1)
 currentVideoHighlights=Math.max(0,currentVideoHighlights-1)
@@ -1275,7 +1554,6 @@ reverseStep()
 
 element=document.createElement("img")
 element.loading="eager"
-
 element.src="/media/"+file
 
 }
@@ -1288,6 +1566,7 @@ if(config.comments_enabled){
 
 fetch("/media/"+file.replace(/\\.[^/.]+$/,"")+".txt")
 .then(r=>r.ok?r.text():"")
+.catch(()=>"")
 .then(comment=>{
 
 if(!comment) return
@@ -1326,7 +1605,9 @@ let useCenterHighlight=isHighlight && config.center_highlight_enabled
 
 if(useCenterHighlight){
 
-let centerScale=config.center_highlight_scale||1.6
+let screenPercent=config.center_highlight_screen_percent??30
+let targetSize=(screenPercent/100)*Math.min(window.innerWidth,window.innerHeight)
+let centerScale=Math.max(0.1,targetSize/size)
 let centerVar=config.center_highlight_position_variation||0
 let centerOffsetX=(Math.random()*2-1)*centerVar
 let centerOffsetY=(Math.random()*2-1)*centerVar
@@ -1360,7 +1641,13 @@ frame.style.top=window.innerHeight+"px"
 element.onload = () => {
 
 frame.appendChild(element)
+let dbgI=document.createElement("div")
+dbgI.className="frameDebugFilename"
+dbgI.textContent=file
+dbgI.style.display=config.debug_overlay?"block":"none"
+frame.appendChild(dbgI)
 document.body.appendChild(frame)
+currentImages++
 
 /* Highlight / Center Highlight */
 
@@ -1371,11 +1658,11 @@ frame.style.boxShadow="0 0 60px "+cfg.highlight_color
 
 if(useCenterHighlight){
 
-let entryMs=(config.center_highlight_entry_speed||1)*1000
-let exitMs=(config.center_highlight_exit_speed||1)*1000
+let entryMs=Math.max(50,(config.center_highlight_entry_speed||1)*1000)
+let exitMs=Math.max(50,(config.center_highlight_exit_speed||1)*1000)
 let centerDur=config.center_highlight_duration*1000
 let mode=config.center_highlight_mode||"fly"
-
+if(config.debug_overlay) addDebugLog("center entry="+entryMs+"ms exit="+exitMs+"ms (from config)")
 frame.style.transition="opacity "+entryMs+"ms ease"
 requestAnimationFrame(()=>{ frame.style.opacity="1" })
 
@@ -1386,6 +1673,7 @@ if(mode==="spotlight"){
 frame.style.transition="opacity "+exitMs+"ms ease"
 frame.style.opacity="0"
 setTimeout(()=>{
+reservedImages.delete(file)
 frame.remove()
 currentCenterHighlights=Math.max(0,currentCenterHighlights-1)
 currentImageHighlights=Math.max(0,currentImageHighlights-1)
@@ -1474,6 +1762,7 @@ startExitWatcher()
 async function init(){
 
 await loadConfig()
+updateDebug()
 await loadImages()
 
 connectWebSocket()

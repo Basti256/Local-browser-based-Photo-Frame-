@@ -1,3 +1,13 @@
+"""
+GUI für den Local-browser-based-Photo-Frame (Tkinter).
+
+Ermöglicht:
+- Projekt auswählen/erstellen
+- Server starten/stoppen (uvicorn pro Projekt)
+- Admin, Wall, Upload in Browser öffnen
+- Backup erstellen/wiederherstellen
+- Tunnel-Status anzeigen
+"""
 import tkinter as tk
 from tkinter import ttk, simpledialog, messagebox, filedialog
 import os
@@ -14,6 +24,8 @@ import threading
 from datetime import datetime
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
 PROJECT_DIR = os.path.join(BASE_DIR, "projects")
 
 processes = {}
@@ -61,7 +73,7 @@ def get_tunnel_status(port):
 
 def firewall_rule_name(project, port):
 
-    return f"WeddingPhotoServer_{project}_{port}"
+    return f"LocalPhotoFrame_{project}_{port}"
 
 
 def open_firewall_port(project, port):
@@ -657,7 +669,11 @@ def open_page(port, page):
 
 root = tk.Tk()
 
-root.title("Wedding Photo Server")
+try:
+    from server.version import __version__
+    root.title(f"Local-browser-based-Photo-Frame v{__version__}")
+except ImportError:
+    root.title("Local-browser-based-Photo-Frame")
 
 root.geometry("1200x650")
 

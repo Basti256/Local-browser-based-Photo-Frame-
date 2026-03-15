@@ -1,24 +1,50 @@
+"""
+Admin-Route (Fly-Modus): Konfigurations- und Status-UI.
+
+- GET /admin: Liefert Admin-HTML (Fly oder Grid je nach wall_view_mode)
+- API: /api/config (GET/POST), /api/admin/stats, /api/network_test
+- API: /api/background/list, /api/background/upload (Hintergrundbilder)
+- Enthält das komplette Admin-HTML als String (_get_admin_fly_html)
+"""
 import socket
 import os
 import time
+import json
+import uuid
 from server.network import get_network_info
 from server import stats
 from server.routes.wall import clients
-from server.main import PROJECT_DIR
-from fastapi import APIRouter
+from server.main import PROJECT_DIR, BACKGROUND_DIR
+from server.routes.admin_grid import get_admin_grid_html
+from fastapi import APIRouter, UploadFile, File
 from fastapi.responses import HTMLResponse
 
 router = APIRouter()
 
 MEDIA_DIR = os.path.join(PROJECT_DIR, "media")
+CONFIG_FILE = os.path.join(PROJECT_DIR, "config.json")
 IMAGE_EXT = (".jpg", ".jpeg", ".png", ".webp", ".gif")
 VIDEO_EXT = (".mp4", ".mov", ".webm")
 
 
+def _load_config():
+    try:
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
 @router.get("/admin", response_class=HTMLResponse)
 def admin():
-    
     net = get_network_info()
+    config = _load_config()
+    if config.get("wall_view_mode") == "grid":
+        return get_admin_grid_html(net)
+    return _get_admin_fly_html(net)
+
+
+def _get_admin_fly_html(net):
     return """
 
 <!DOCTYPE html>
@@ -26,7 +52,7 @@ def admin():
 
 <head>
 
-<title>Fotowand Admin</title>
+<title>Local-browser-based-Photo-Frame Admin</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
 <style>
@@ -147,110 +173,59 @@ margin-top:25px;
 
 <div class="container">
 
-<h1>Fotowand Einstellungen</h1>
-
-<!-- Erweitert -->
-
-<h2 class="sectionGroupTitle">Erweitert</h2>
-
-<!-- Netzwerk -->
-
-<div class="section">
-
-<div class="sectionHeader" onclick="toggleSection(this)">
-Netzwerk
-<span>▼</span>
-</div>
-
-<div class="sectionContent">
-
-<div id="help_network" class="sectionInfo">
-Steuert, wer und wie auf den Server zugreifen kann.
-</div>
-
-<label>Netzwerkmodus</label>
-
-<select id="network_mode">
-    <option value="local">Local (nur dieser Computer)</option>
-    <option value="network">Network (im WLAN sichtbar)</option>
-    <option value="public">Public Internet (Router Port Forward)</option>
-    <option value="tunnel">Public Internet (Cloudflare Tunnel)</option>
-</select>
-
-<div id="network_info" style="margin-top:15px;padding:10px;border:1px solid #ccc;">
-<b>Network Info</b>
-<div id="network_details">lädt...</div>
-</div>
-
-<button onclick="testNetwork()" style="margin-bottom:10px;">
-Verbindung testen
-</button>
-
-<div id="network_test_result" style="
-margin-top:10px;
-background:#eef5ff;
-padding:10px;
-border-radius:6px;
-font-family:monospace;
-font-size:14px;
-"></div>
-
-<label>Public Base URL
-<span class="help" onclick="event.stopPropagation();toggleHelp('help_public_base')">❓</span>
-</label>
-<div id="help_public_base" class="helpText">
-Optionale öffentliche Basis-URL, die in Links verwendet wird (z.B. bei Reverse Proxy).
-</div>
-<input id="public_base_url">
-
-</div>
-</div>
-
-
-<!-- Tunnel-Verwaltung -->
-<div class="section">
-<div class="sectionHeader" onclick="toggleSection(this)">
-    Tunnel-Verwaltung
-    <span>▼</span>
-  </div>
-  <div class="sectionContent">
-    <div id="help_tunnel" class="sectionInfo">
-Cloudflare-Tunnel stellt die Wand ohne eigene Router-Konfiguration über das Internet bereit.
-    </div>
-    <p>Tunnel-Status: <span id="tunnel_status">...</span></p>
-    <button onclick="startTunnel()">Tunnel starten</button>
-    <button onclick="stopTunnel()">Tunnel stoppen</button>
-  </div>
-</div>
-
-
-<!-- Debug -->
-
-<div class="section">
-
-<div class="sectionHeader" onclick="toggleSection(this)">
-Debug
-<span>▼</span>
-</div>
-
-<div class="sectionContent">
-
-<div id="help_debug" class="sectionInfo">
-Zeigt ein technisches Overlay mit Status-Informationen zur Wand (nur für Fehlersuche).
-</div>
-
-<div class="row">
-<label>Debug Overlay anzeigen</label>
-<input type="checkbox" id="debug_overlay" class="checkbox">
-</div>
-
-</div>
-</div>
-
+<h1>Local-browser-based-Photo-Frame Einstellungen <span id="app_version" style="font-size:0.5em;color:#666;font-weight:normal;"></span></h1>
 
 <!-- Design -->
 
 <h2 class="sectionGroupTitle">Design</h2>
+
+<!-- Ansicht -->
+
+<div class="section">
+
+<div class="sectionHeader" onclick="toggleSection(this)">
+Ansicht
+<span>▼</span>
+</div>
+
+<div class="sectionContent">
+
+<div id="help_view_mode" class="sectionInfo">
+Wählt die Darstellungsart: Fliegende Bilder oder Grid. Nach dem Speichern werden Admin und Wall neu geladen.
+</div>
+
+<label>Design</label>
+<select id="wall_view_mode">
+<option value="fly">Fliegend (Bilder fliegen über den Bildschirm)</option>
+<option value="grid">Grid (Bilder nebeneinander)</option>
+</select>
+
+<div id="grid_settings" style="margin-top:20px;padding-top:15px;border-top:1px solid #eee;display:none;">
+
+<h3 style="margin-top:0;color:#333;">Grid-Einstellungen</h3>
+
+<label>Spalten (gleichzeitig sichtbare Bilder)</label>
+<input id="grid_columns" placeholder="4" type="number">
+
+<label>Durchlaufzeit (Sekunden bis Bild oben verschwindet)</label>
+<input id="grid_animation_duration" placeholder="8" type="number">
+
+<label>Abstand zwischen Spalten (px)</label>
+<input id="grid_spacing_columns" placeholder="20" type="number">
+
+<label>Abstand zwischen Zeilen (px)</label>
+<input id="grid_spacing_rows" placeholder="0" type="number">
+
+<div class="row">
+<label>Fotorahmen anzeigen</label>
+<input type="checkbox" id="grid_show_frames" class="checkbox">
+</div>
+
+</div>
+
+</div>
+</div>
+
 
 <!-- Slideshow -->
 
@@ -440,13 +415,13 @@ Wählt aus, wie das Center Highlight animiert wird (Durchflug oder Spotlight).
 <option value="fly">Fly Through</option>
 <option value="spotlight">Spotlight</option>
 </select>
-<label>Größe (Skalierung)
+<label>Größe (% des Bildschirms)
 <span class="help" onclick="event.stopPropagation();toggleHelp('help_center_scale')">❓</span>
 </label>
 <div id="help_center_scale" class="helpText">
-Wie groß das Bild/Video in der Mitte angezeigt wird (z.B. 1.6 = 160% der Originalgröße).
+Wie viel vom Bildschirm das Bild/Video in der Mitte einnimmt (z.B. 30 = füllt 30% der Bildschirmhöhe).
 </div>
-<input id="center_scale" placeholder="1.6">
+<input id="center_screen_percent" placeholder="30" type="number" min="5" max="100">
 <label>Dauer (Sekunden)
 <span class="help" onclick="event.stopPropagation();toggleHelp('help_center_duration')">❓</span>
 </label>
@@ -468,21 +443,53 @@ Maximale Anzahl von Center Highlights, die gleichzeitig angezeigt werden dürfen
 Wie stark die Position von der Bildschirmmitte abweichen darf (0 = exakt mittig, z.B. 50 = leichte zufällige Versetzung).
 </div>
 <input id="center_variation" placeholder="30">
-<label>Entry Speed
+<label>Entry Speed (Sekunden)
 <span class="help" onclick="event.stopPropagation();toggleHelp('help_center_entry')">❓</span>
 </label>
 <div id="help_center_entry" class="helpText">
-Geschwindigkeit, mit der das Bild ins Center Highlight hinein fliegt.
+Dauer der Einblendung ins Center (z.B. 0.2 = schnell, 2 = langsam). Wert in Sekunden.
 </div>
-<input id="center_entry">
-<label>Exit Speed
+<input id="center_entry" type="number" min="0.05" max="30" step="0.1" placeholder="1">
+<label>Exit Speed (Sekunden)
 <span class="help" onclick="event.stopPropagation();toggleHelp('help_center_exit')">❓</span>
 </label>
 <div id="help_center_exit" class="helpText">
-Geschwindigkeit, mit der das Bild das Center Highlight wieder verlässt.
+Dauer des Abflugs vom Center nach unten (z.B. 0.5 = schnell, 3 = langsam). Wert in Sekunden.
 </div>
-<input id="center_exit">
+<input id="center_exit" type="number" min="0.05" max="30" step="0.1" placeholder="1">
 
+</div>
+</div>
+
+
+<!-- Hintergrund -->
+
+<div class="section">
+<div class="sectionHeader" onclick="toggleSection(this)">
+Hintergrund
+<span>▼</span>
+</div>
+<div class="sectionContent">
+<div class="sectionInfo">Hintergrund der Anzeige: Farbe oder Bild.</div>
+<label>Modus</label>
+<select id="background_mode">
+<option value="color">Hintergrundfarbe</option>
+<option value="image">Hintergrundbild</option>
+</select>
+<div id="background_color_row">
+<label>Hintergrundfarbe</label>
+<input type="color" id="background_color">
+<input type="text" id="background_color_hex" placeholder="#000000" style="margin-top:5px;">
+</div>
+<div id="background_image_row" style="display:none;">
+<label>Hintergrundbild</label>
+<input type="file" id="background_upload_input" accept="image/*" style="margin-bottom:10px;">
+<button type="button" id="background_upload_btn" style="background:#4CAF50;color:white;border:none;padding:8px 16px;border-radius:6px;margin-bottom:10px;">Bild hochladen</button>
+<select id="background_image" style="margin-top:5px;">
+<option value="">– Bild auswählen –</option>
+</select>
+<div id="background_image_preview" style="margin-top:10px;max-width:200px;height:120px;border:1px solid #ccc;border-radius:6px;overflow:hidden;background:#333;"></div>
+</div>
 </div>
 </div>
 
@@ -677,6 +684,165 @@ Text, den Gäste beim Hochladen zu Fotos eingeben können. Wird unter dem Bild a
 </div>
 
 
+<!-- Erweitert -->
+
+<h2 class="sectionGroupTitle">Erweitert</h2>
+
+<!-- Netzwerk -->
+
+<div class="section">
+
+<div class="sectionHeader" onclick="toggleSection(this)">
+Netzwerk
+<span>▼</span>
+</div>
+
+<div class="sectionContent">
+
+<div id="help_network" class="sectionInfo">
+Steuert, wer und wie auf den Server zugreifen kann.
+</div>
+
+<label>Netzwerkmodus</label>
+
+<select id="network_mode">
+    <option value="local">Local (nur dieser Computer)</option>
+    <option value="network">Network (im WLAN sichtbar)</option>
+    <option value="public">Public Internet (Router Port Forward)</option>
+    <option value="tunnel">Public Internet (Cloudflare Tunnel)</option>
+</select>
+
+<div id="network_info" style="margin-top:15px;padding:10px;border:1px solid #ccc;">
+<b>Network Info</b>
+<div id="network_details">lädt...</div>
+</div>
+
+<button onclick="testNetwork()" style="margin-bottom:10px;">
+Verbindung testen
+</button>
+
+<div id="network_test_result" style="
+margin-top:10px;
+background:#eef5ff;
+padding:10px;
+border-radius:6px;
+font-family:monospace;
+font-size:14px;
+"></div>
+
+<label>Public Base URL
+<span class="help" onclick="event.stopPropagation();toggleHelp('help_public_base')">❓</span>
+</label>
+<div id="help_public_base" class="helpText">
+Optionale öffentliche Basis-URL, die in Links verwendet wird (z.B. bei Reverse Proxy).
+</div>
+<input id="public_base_url">
+
+</div>
+</div>
+
+
+<!-- Tunnel-Verwaltung -->
+<div class="section">
+<div class="sectionHeader" onclick="toggleSection(this)">
+    Tunnel-Verwaltung
+    <span>▼</span>
+  </div>
+  <div class="sectionContent">
+    <div id="help_tunnel" class="sectionInfo">
+Cloudflare-Tunnel stellt die Wand ohne eigene Router-Konfiguration über das Internet bereit.
+    </div>
+    <p>Tunnel-Status: <span id="tunnel_status">...</span></p>
+    <button onclick="startTunnel()">Tunnel starten</button>
+    <button onclick="stopTunnel()">Tunnel stoppen</button>
+  </div>
+</div>
+
+
+<!-- Extras -->
+
+<div class="section">
+<div class="sectionHeader" onclick="toggleSection(this)">
+Extras
+<span>▼</span>
+</div>
+<div class="sectionContent">
+<div class="row">
+<label>Bildschirm wach halten (Wake Lock API)</label>
+<input type="checkbox" id="screen_wake_lock" class="checkbox">
+</div>
+<div class="sectionInfo" style="margin-top:5px;">
+Verwendet die Wake Lock API. Funktioniert in Chrome und einigen anderen Browsern.
+</div>
+
+<div class="row">
+<label>Alternative Wachfunktion (Video-Fallback)</label>
+<input type="checkbox" id="screen_wake_lock_alternative" class="checkbox">
+</div>
+<div class="sectionInfo" style="margin-top:5px;">
+Spielt ein unsichtbares Video im Hintergrund. Funktioniert in Edge, Firefox und älteren Browsern, wenn die Wake Lock API nicht unterstützt wird.
+</div>
+</div>
+</div>
+
+<!-- Debug -->
+
+<div class="section">
+
+<div class="sectionHeader" onclick="toggleSection(this)">
+Debug
+<span>▼</span>
+</div>
+
+<div class="sectionContent">
+
+<div id="help_debug" class="sectionInfo">
+Zeigt ein technisches Overlay mit Status-Informationen zur Wand (nur für Fehlersuche).
+</div>
+
+<div class="row">
+<label>Debug Overlay anzeigen</label>
+<input type="checkbox" id="debug_overlay" class="checkbox">
+</div>
+
+</div>
+</div>
+
+
+<!-- Media-Cache -->
+
+<div class="section">
+<div class="sectionHeader" onclick="toggleSection(this)">
+Media-Cache
+<span>▼</span>
+</div>
+<div class="sectionContent">
+
+<div id="help_cache" class="sectionInfo">
+Lädt Bilder und Videos beim ersten Abruf in den Browser-Cache. Bei Verbindungsabbruch werden sie aus dem Cache geladen (Fallback). TTL = wie lange Einträge gültig bleiben.
+</div>
+
+<div class="row">
+<label>Cache aktivieren</label>
+<input type="checkbox" id="cache_enabled" class="checkbox">
+</div>
+
+<label>Cache TTL (Minuten)</label>
+<input id="cache_ttl_minutes" placeholder="30" type="number">
+
+<label>Max. Bilder im Cache</label>
+<input id="cache_max_images" placeholder="100" type="number">
+
+<label>Max. Videos im Cache</label>
+<input id="cache_max_videos" placeholder="20" type="number">
+
+<label>Max. Cache-Größe (MB, 0 = unbegrenzt)</label>
+<input id="cache_max_size_mb" placeholder="500" type="number">
+
+</div>
+</div>
+
+
 <!-- Upload-Seite -->
 
 <div class="section">
@@ -866,7 +1032,66 @@ el.style.display=el.style.display==="block"?"none":"block"
 
 }
 
+function updateBackgroundModeVisibility(){
+let modeEl=document.getElementById("background_mode")
+let colorRow=document.getElementById("background_color_row")
+let imageRow=document.getElementById("background_image_row")
+if(!modeEl||!colorRow||!imageRow) return
+let mode=modeEl.value
+colorRow.style.display=mode==="color"?"block":"none"
+imageRow.style.display=mode==="image"?"block":"none"
+}
 
+async function loadBackgroundList(){
+let sel=document.getElementById("background_image")
+let cur=sel.value
+sel.innerHTML='<option value="">– Bild auswählen –</option>'
+try{
+let res=await fetch("/api/background/list")
+let files=await res.json()
+for(let f of files){
+let opt=document.createElement("option")
+opt.value=f
+opt.textContent=f
+sel.appendChild(opt)
+}
+if(cur) sel.value=cur
+}catch(e){}
+}
+
+function updateBackgroundPreview(){
+let sel=document.getElementById("background_image")
+let prev=document.getElementById("background_image_preview")
+if(!sel||!prev) return
+if(!sel.value){ prev.style.backgroundImage=""; prev.style.background="#333"; return }
+prev.style.backgroundImage="url(/background/"+encodeURIComponent(sel.value)+")"
+prev.style.backgroundSize="cover"
+prev.style.backgroundPosition="center"
+}
+
+document.addEventListener("DOMContentLoaded",()=>{
+let bgMode=document.getElementById("background_mode")
+let bgColor=document.getElementById("background_color")
+let bgHex=document.getElementById("background_color_hex")
+let bgUploadBtn=document.getElementById("background_upload_btn")
+let bgUploadInput=document.getElementById("background_upload_input")
+let bgImage=document.getElementById("background_image")
+if(bgMode) bgMode.onchange=updateBackgroundModeVisibility
+if(bgColor) bgColor.oninput=()=>{ if(bgHex) bgHex.value=bgColor.value }
+if(bgHex) bgHex.oninput=()=>{ if(/^#[0-9A-Fa-f]{6}$/.test(bgHex.value)) bgColor.value=bgHex.value }
+if(bgImage) bgImage.onchange=updateBackgroundPreview
+if(bgUploadBtn&&bgUploadInput) bgUploadBtn.onclick=async()=>{
+if(!bgUploadInput.files||!bgUploadInput.files[0]){ alert("Bitte zuerst ein Bild auswählen"); return }
+let fd=new FormData()
+fd.append("file",bgUploadInput.files[0])
+try{
+let r=await fetch("/api/background/upload",{method:"POST",body:fd})
+let d=await r.json()
+if(d.ok){ await loadBackgroundList(); bgImage.value=d.filename; updateBackgroundPreview(); bgUploadInput.value="" }
+else alert(d.error||"Upload fehlgeschlagen")
+}catch(e){ alert("Upload fehlgeschlagen") }
+}
+})
 
 let config={}
 
@@ -874,6 +1099,15 @@ async function load(){
 
 let res=await fetch("/api/config")
 config=await res.json()
+
+wall_view_mode.value=config.wall_view_mode||"fly"
+document.getElementById("grid_settings").style.display=(config.wall_view_mode||"fly")==="grid"?"block":"none"
+wall_view_mode.onchange=function(){ document.getElementById("grid_settings").style.display=wall_view_mode.value==="grid"?"block":"none" }
+grid_columns.value=config.grid_columns||4
+grid_animation_duration.value=config.grid_animation_duration||config.grid_interval||8
+grid_spacing_columns.value=config.grid_spacing_columns||config.grid_spacing_rows||20
+grid_spacing_rows.value=config.grid_spacing_rows||config.grid_spacing||0
+grid_show_frames.checked=config.grid_show_frames!==false
 
 network_mode.value=config.network_mode
 public_base_url.value=config.public_base_url
@@ -919,12 +1153,24 @@ max_highlights_video.value=config.video_max_simultaneous_highlights
 
 center_highlight.checked=config.center_highlight_enabled
 center_mode.value=config.center_highlight_mode
-center_scale.value=config.center_highlight_scale
+center_screen_percent.value=config.center_highlight_screen_percent??30
 center_duration.value=config.center_highlight_duration
 center_max.value=config.center_highlight_max_simultaneous
 center_variation.value=config.center_highlight_position_variation
 center_entry.value=config.center_highlight_entry_speed
 center_exit.value=config.center_highlight_exit_speed
+
+let bgMode=document.getElementById("background_mode")
+let bgColor=document.getElementById("background_color")
+let bgColorHex=document.getElementById("background_color_hex")
+let bgImage=document.getElementById("background_image")
+if(bgMode){ bgMode.value=config.background_mode||"color" }
+if(bgColor){ bgColor.value=config.background_color||"#000000" }
+if(bgColorHex){ bgColorHex.value=config.background_color||"#000000" }
+if(bgImage){ bgImage.value=config.background_image||"" }
+updateBackgroundModeVisibility()
+await loadBackgroundList()
+updateBackgroundPreview()
 
 qr_show.checked=config.show_qr_code
 qr_text.value=config.qr_text
@@ -963,6 +1209,12 @@ upload_max_files.value=config.upload_max_files || 20
 upload_max_file_size_mb.value=config.upload_max_file_size_mb || 50
 
 debug_overlay.checked=config.debug_overlay || false
+let screenWakeLockEl=document.getElementById("screen_wake_lock")
+if(screenWakeLockEl) screenWakeLockEl.checked=config.screen_wake_lock_enabled || false
+let screenWakeLockAltEl=document.getElementById("screen_wake_lock_alternative")
+if(screenWakeLockAltEl) screenWakeLockAltEl.checked=config.screen_wake_lock_alternative || false
+cache_enabled.checked=config.cache_enabled || false
+cache_ttl_minutes.value=config.cache_ttl_minutes || 30
 
 }
 
@@ -978,6 +1230,16 @@ function toInt(value, fallback){
     let v=parseInt(value)
     return isNaN(v)?fallback:v
 }
+
+let res=await fetch("/api/config")
+let config=await res.json()
+
+config.wall_view_mode = wall_view_mode.value
+config.grid_columns = toInt(grid_columns.value, config.grid_columns || 4)
+config.grid_animation_duration = toFloat(grid_animation_duration.value, config.grid_animation_duration || config.grid_interval || 8)
+config.grid_spacing_columns = toInt(grid_spacing_columns.value, config.grid_spacing_columns || config.grid_spacing_rows || 20)
+config.grid_spacing_rows = toInt(grid_spacing_rows.value, config.grid_spacing_rows || config.grid_spacing || 0)
+config.grid_show_frames = grid_show_frames.checked
 
 config.network_mode = network_mode.value
 config.public_base_url = public_base_url.value
@@ -1023,12 +1285,19 @@ config.video_max_simultaneous_highlights=toInt(max_highlights_video.value, confi
 
 config.center_highlight_enabled=center_highlight.checked
 config.center_highlight_mode=center_mode.value
-config.center_highlight_scale=toFloat(center_scale.value, config.center_highlight_scale || 1.6)
+config.center_highlight_screen_percent=toFloat(center_screen_percent.value, config.center_highlight_screen_percent ?? 30)
 config.center_highlight_duration=toFloat(center_duration.value, config.center_highlight_duration || 5)
 config.center_highlight_max_simultaneous=toInt(center_max.value, config.center_highlight_max_simultaneous || 1)
 config.center_highlight_position_variation=toFloat(center_variation.value, config.center_highlight_position_variation || 30)
 config.center_highlight_entry_speed=toFloat(center_entry.value, config.center_highlight_entry_speed || 1)
 config.center_highlight_exit_speed=toFloat(center_exit.value, config.center_highlight_exit_speed || 1)
+
+let bgModeEl=document.getElementById("background_mode")
+let bgColorEl=document.getElementById("background_color")
+let bgImageEl=document.getElementById("background_image")
+config.background_mode=bgModeEl?bgModeEl.value:"color"
+config.background_color=bgColorEl?bgColorEl.value:"#000000"
+config.background_image=(bgModeEl&&bgModeEl.value==="image"&&bgImageEl)?bgImageEl.value:""
 
 config.show_qr_code=qr_show.checked
 config.qr_text=qr_text.value
@@ -1066,17 +1335,30 @@ config.upload_max_files=toInt(upload_max_files.value, config.upload_max_files ||
 config.upload_max_file_size_mb=toInt(upload_max_file_size_mb.value, config.upload_max_file_size_mb || 50)
 
 config.debug_overlay=debug_overlay.checked
+let screenWakeLockCb=document.getElementById("screen_wake_lock")
+config.screen_wake_lock_enabled=screenWakeLockCb?screenWakeLockCb.checked:false
+let screenWakeLockAltCb=document.getElementById("screen_wake_lock_alternative")
+config.screen_wake_lock_alternative=screenWakeLockAltCb?screenWakeLockAltCb.checked:false
+config.cache_enabled=cache_enabled.checked
+config.cache_ttl_minutes=toInt(cache_ttl_minutes.value, config.cache_ttl_minutes || 30)
+config.cache_max_images=toInt(cache_max_images.value, config.cache_max_images || 100)
+config.cache_max_videos=toInt(cache_max_videos.value, config.cache_max_videos || 20)
+config.cache_max_size_mb=toInt(cache_max_size_mb.value, config.cache_max_size_mb || 500)
 
-await fetch("/api/config",{
+let saveRes=await fetch("/api/config",{
 method:"POST",
 headers:{
 "Content-Type":"application/json"
 },
 body:JSON.stringify(config)
 })
-
-alert("Einstellungen gespeichert")
-
+let saveData=await saveRes.json()
+if(saveData.view_changed){
+alert("Einstellungen gespeichert. Ansicht geändert – Admin und Wall werden neu geladen.")
+location.reload()
+}else{
+alert("Einstellungen gespeichert.")
+}
 }
 
 async function testNetwork(){
@@ -1125,6 +1407,10 @@ box.innerHTML = txt
 }
 
 load()
+fetch("/api/version").then(r=>r.json()).then(d=>{
+let el=document.getElementById("app_version")
+if(el) el.textContent="v"+d.version
+}).catch(()=>{})
 
 async function updateTunnel(){
 
@@ -1265,3 +1551,41 @@ def network_test():
             pass
 
     return result
+
+
+# ------------------------------------------------
+# Hintergrund (Wall)
+# ------------------------------------------------
+
+BG_IMAGE_EXT = (".jpg", ".jpeg", ".png", ".webp", ".gif")
+
+
+@router.get("/api/background/list")
+def background_list():
+    """Liste aller Hintergrundbilder im background-Ordner."""
+    if not os.path.isdir(BACKGROUND_DIR):
+        return []
+    files = []
+    for f in sorted(os.listdir(BACKGROUND_DIR)):
+        if os.path.splitext(f)[1].lower() in BG_IMAGE_EXT:
+            files.append(f)
+    return files
+
+
+@router.post("/api/background/upload")
+async def background_upload(file: UploadFile = File(...)):
+    """Hintergrundbild hochladen."""
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in BG_IMAGE_EXT:
+        return {"ok": False, "error": "Nur Bilder erlaubt (jpg, png, webp, gif)"}
+    safe_base = "".join(c for c in (os.path.splitext(file.filename or "image")[0]) if c.isalnum() or c in "._- ")
+    if not safe_base:
+        safe_base = "image"
+    filename = f"{safe_base}_{uuid.uuid4().hex[:6]}{ext}"
+    path = os.path.join(BACKGROUND_DIR, filename)
+    content = await file.read()
+    if len(content) > 20 * 1024 * 1024:  # 20 MB
+        return {"ok": False, "error": "Datei zu groß (max 20 MB)"}
+    with open(path, "wb") as f:
+        f.write(content)
+    return {"ok": True, "filename": filename}

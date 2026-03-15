@@ -1,3 +1,9 @@
+"""
+Cloudflare Tunnel Manager.
+
+Startet cloudflared (bin/cloudflared.exe) und parst die öffentliche URL
+aus der Ausgabe (trycloudflare.com). Wird bei network_mode="tunnel" verwendet.
+"""
 import subprocess
 import threading
 import re
@@ -59,6 +65,7 @@ class TunnelManager:
     # ------------------------------------------------
 
     def stop(self):
+        """Beendet den cloudflared-Prozess."""
 
         if self.process:
 
@@ -75,6 +82,7 @@ class TunnelManager:
     # ------------------------------------------------
 
     def status(self):
+        """Liefert {"running": bool, "url": str oder None}."""
 
         url = self.public_url
         # Bereinige URL falls sie Pfade/Präfixe enthält

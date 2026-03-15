@@ -1,10 +1,16 @@
+"""
+Windows-Firewall: Port automatisch öffnen/schließen.
+
+Verwendet netsh advfirewall. Nur unter Windows relevant.
+Bei network/public wird der Server-Port beim Start geöffnet und beim Shutdown geschlossen.
+"""
 import subprocess
 
-
-RULE_NAME = "WeddingPhotoWall"
+RULE_NAME = "LocalPhotoFrame"
 
 
 def open_firewall_port(port):
+    """Fügt eine eingehende Firewall-Regel für den angegebenen TCP-Port hinzu."""
 
     try:
 
@@ -30,6 +36,7 @@ def open_firewall_port(port):
 
 
 def close_firewall_port(port):
+    """Entfernt die Firewall-Regel für den angegebenen Port."""
 
     try:
 

@@ -1,3 +1,11 @@
+"""
+Upload-Route: Gäste-Seite zum Hochladen von Fotos und Videos.
+
+- GET /upload: HTML-Seite mit Kamera, Dateiauswahl, Drag & Drop
+- POST /upload: Empfängt Datei + optionalen Kommentar
+- Verarbeitet Bilder (PIL: Rotation, HEIC->JPG), validiert Videos (Magic Bytes)
+- Ruft wall.broadcast() auf, damit neue Dateien sofort auf der Wall erscheinen
+"""
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
 import os
@@ -18,7 +26,7 @@ register_heif_opener()
 router = APIRouter()
 
 # ------------------------------------------------
-# Paths (Projektabhängig!)
+# Pfade (projektabhängig)
 # ------------------------------------------------
 
 UPLOAD_FOLDER = os.path.join(PROJECT_DIR, "media")

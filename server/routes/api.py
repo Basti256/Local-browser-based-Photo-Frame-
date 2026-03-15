@@ -1,3 +1,9 @@
+"""
+Legacy API-Router (aktuell nicht in main.py eingebunden).
+
+Enthält /api/images für Bildlisten. Die Wall verwendet stattdessen
+die Routen aus wall.py (/api/images, /api/config, etc.).
+"""
 from fastapi import APIRouter
 import os
 

@@ -1,3 +1,12 @@
+"""
+Netzwerk-Utilities: IP-Adressen, URLs, Admin-Infos.
+
+- get_local_ip(): Lokale IP im LAN
+- get_external_ip(): Externe IP (via ipify.org)
+- get_base_url(): Basis-URL je nach network_mode (local/network/public/tunnel)
+- get_upload_url(), get_wall_url(): Konkrete Seiten-URLs
+- get_network_info(): Infos für Admin-Status (mode, port, IPs, URLs)
+"""
 import json
 import socket
 import urllib.request
@@ -5,11 +14,11 @@ import os
 from server.main import PROJECT_DIR
 from server.tunnel_manager import tunnel_manager
 
-
-CONFIG_FILE = os.path.join(PROJECT_DIR,"config.json")
+CONFIG_FILE = os.path.join(PROJECT_DIR, "config.json")
 
 
 def get_local_ip():
+    """Ermittelt die lokale IP-Adresse (z.B. 192.168.1.100) via UDP-Verbindung zu 8.8.8.8."""
 
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.connect(("8.8.8.8",80))
@@ -24,15 +33,16 @@ def get_local_ip():
 # ------------------------------------------------
 
 def get_external_ip():
-
+    """Ermittelt die externe (öffentliche) IP via api.ipify.org. None bei Fehler."""
     try:
         with urllib.request.urlopen("https://api.ipify.org", timeout=3) as r:
             return r.read().decode()
-    except:
+    except Exception:
         return None
 
 
 def get_base_url():
+    """Liefert die Basis-URL (z.B. http://192.168.1.100:8000) je nach network_mode."""
 
     if not os.path.exists(CONFIG_FILE):
         return "http://127.0.0.1:8000"
@@ -94,24 +104,17 @@ def get_base_url():
 
 
 def get_upload_url():
-
+    """URL der Upload-Seite für Gäste (z.B. für QR-Code)."""
     return get_base_url() + "/upload"
 
 
-# ------------------------------------------------
-# NEW: Wall URL
-# ------------------------------------------------
-
 def get_wall_url():
-
+    """URL der Wall-Anzeige."""
     return get_base_url() + "/wall"
 
 
-# ------------------------------------------------
-# NEW: Debug information
-# ------------------------------------------------
-
 def get_network_info():
+    """Liefert ein Dict mit mode, port, local_ip, external_ip, upload_url, wall_url für die Admin-UI."""
 
     if not os.path.exists(CONFIG_FILE):
         return {}
