@@ -1,6 +1,6 @@
 # Wedding Photo Frame
 
-Ein interaktiver Foto-Rahmen für Hochzeiten: Gäste können Fotos und Videos per QR-Code hochladen, die live auf einem Bildschirm angezeigt werden.
+Ein interaktiver Foto-Rahmen für (in meinem Fall) Hochzeiten: Gäste können Fotos und Videos per QR-Code hochladen, die live auf einem Bildschirm angezeigt werden. Es kann auch für jede andere Art von Bildern/Videos verwendet werden. 
 
 ## Features
 
@@ -20,7 +20,7 @@ Ein interaktiver Foto-Rahmen für Hochzeiten: Gäste können Fotos und Videos pe
 
 ```bash
 # Repository klonen
-git clone https://github.com/DEIN-USERNAME/wedding-photo-frame.git
+git clone https://github.com/Basti256/Local-browser-based-Photo-Frame-.git
 cd wedding-photo-frame
 
 # Virtuelle Umgebung anlegen
