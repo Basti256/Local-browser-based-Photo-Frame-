@@ -14,6 +14,7 @@ Ein interaktiver Foto-Rahmen für Hochzeiten: Gäste können Fotos und Videos pe
 
 - Python 3.10+
 - Windows (für Firewall-Regeln; läuft auch auf anderen Systemen ohne Firewall-Automatik)
+- **Cloudflare Tunnel (optional)**: Für den Tunnel-Modus wird `cloudflared` benötigt – siehe unten
 
 ## Installation
 
@@ -31,6 +32,16 @@ venv\Scripts\activate
 # Abhängigkeiten installieren
 pip install -r requirements.txt
 ```
+
+### Cloudflare Tunnel (für öffentlichen Zugriff)
+
+Der **Tunnel-Modus** ermöglicht einen öffentlichen Zugriff ohne Port-Forwarding. Dafür wird `cloudflared` benötigt:
+
+1. **Download**: [Cloudflare Tunnel – Downloads](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/downloads/)
+2. **Windows**: `cloudflared-windows-amd64.exe` herunterladen und als `cloudflared.exe` in den Ordner `bin/` legen
+3. Alternativ per winget: `winget install --id Cloudflare.cloudflared` (danach Pfad zu `cloudflared.exe` in `bin/` kopieren oder anpassen)
+
+Ohne `bin/cloudflared.exe` funktioniert der Tunnel-Modus nicht; alle anderen Features laufen normal.
 
 ## Start
 
@@ -51,6 +62,7 @@ venv\Scripts\python.exe -m uvicorn server.main:app --port 8000 --project=DeinPro
 ## Projektstruktur
 
 ```
+├── bin/           # cloudflared.exe (optional, für Tunnel-Modus)
 ├── gui/           # Tkinter-Verwaltungsoberfläche
 ├── server/        # FastAPI-Backend
 ├── projects/      # Projekt-Ordner (config.json + media/)
