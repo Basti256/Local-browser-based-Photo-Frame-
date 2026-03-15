@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+websockets
+python-multipart
+pillow
+qrcode
+pyside6
+pillow
+pillow-heif
+psutil
