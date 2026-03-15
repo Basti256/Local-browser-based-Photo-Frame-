@@ -72,4 +72,4 @@ venv\Scripts\python.exe -m uvicorn server.main:app --port 8000 --project=DeinPro
 
 ## Lizenz
 
-MIT (oder nach Wunsch anpassen)
+MIT
