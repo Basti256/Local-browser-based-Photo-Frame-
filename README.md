@@ -178,4 +178,4 @@ Nach dem Start:
 
 ## Lizenz
 
-MIT (oder nach Wunsch anpassen)
+MIT
