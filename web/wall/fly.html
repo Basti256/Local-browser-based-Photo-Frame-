@@ -1,0 +1,1810 @@
+
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<meta charset="UTF-8">
+
+<link href="https://fonts.googleapis.com/css2?family=Caveat&display=swap" rel="stylesheet">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="/static/simple-md.js"></script>
+<script src="/static/banner-fit.js"></script>
+<script src="/static/background.js"></script>
+<script src="/static/comments.js"></script>
+<script src="/static/comment-fonts.js"></script>
+
+<link rel="stylesheet" href="/static/banner.css">
+<link rel="stylesheet" href="/static/background.css">
+<style>
+
+body{
+margin:0;
+overflow:hidden;
+background:black;
+font-family:Arial;
+}
+
+#debugOverlay{
+
+position:absolute;
+top:10px;
+left:10px;
+
+background:rgba(0,0,0,0.6);
+color:white;
+
+padding:8px 12px;
+border-radius:6px;
+
+font-size:14px;
+font-family:monospace;
+
+z-index:5000;
+
+display:none;
+
+}
+
+#connectionStatus{
+
+position:absolute;
+top:10px;
+right:10px;
+
+width:14px;
+height:14px;
+
+border-radius:50%;
+
+background:red;
+
+box-shadow:0 0 6px rgba(0,0,0,0.6);
+
+z-index:6000;
+
+transition:opacity 1s;
+
+}
+
+.photoFrame{
+position:absolute;
+background:white;
+border-radius:4px;
+box-shadow:
+0 12px 30px rgba(0,0,0,0.7),
+0 4px 10px rgba(0,0,0,0.5);
+
+pointer-events:none;
+
+z-index:100;
+}
+
+.photoFrame img,
+.photoFrame video{
+display:block;
+width:100%;
+height:auto;
+}
+
+.photoFrame.from-cache{
+outline:4px solid #ff6600;
+outline-offset:3px;
+box-shadow:0 0 16px rgba(255,102,0,0.8);
+z-index:150;
+}
+
+.frameDebugFilename{
+position:absolute;
+bottom:4px;
+left:4px;
+right:4px;
+font-size:10px;
+color:#fff;
+background:rgba(0,0,0,0.8);
+padding:2px 6px;
+text-align:center;
+overflow:hidden;
+text-overflow:ellipsis;
+white-space:nowrap;
+z-index:10;
+}
+
+#laneDebugOverlay{
+position:fixed;
+inset:0;
+pointer-events:none;
+z-index:400;
+display:none;
+}
+.laneDebugLine{
+position:absolute;
+top:0;
+bottom:0;
+width:0;
+border-left:2px dashed rgba(80,255,200,0.85);
+transform:translateX(-1px);
+}
+.laneDebugLabel{
+position:absolute;
+top:50%;
+left:0;
+transform:translate(-50%,-50%);
+color:#9fffe0;
+font:700 12px/1 monospace;
+background:rgba(0,0,0,0.55);
+padding:3px 6px;
+border-radius:3px;
+white-space:nowrap;
+}
+.burstDebugLine{
+border-left:3px solid rgba(255,220,80,0.95);
+}
+.burstDebugLine .laneDebugLabel{
+color:#ffe98a;
+}
+.laneDebugLine.spawnFlash{
+border-left-color:#ff3b3b;
+}
+.laneDebugLine.spawnFlash .laneDebugLabel{
+color:#ffd0d0;
+background:rgba(120,0,0,0.75);
+}
+
+.photoComment{
+
+position:absolute;
+bottom:8px;
+left:8px;
+right:8px;
+
+text-align:center;
+
+font-family:'Caveat', cursive;
+
+white-space:pre-wrap;
+word-break:break-word;
+line-height:1.2;
+
+}
+
+.highlight{
+z-index:200;
+}
+
+#qrContainer{
+
+position:absolute;
+z-index:3000;
+
+padding:14px;
+
+background:rgba(0,0,0,0.55);
+
+border-radius:12px;
+
+text-align:center;
+
+opacity:1;
+
+transition:opacity 1s ease;
+
+}
+
+#banner{
+
+position:absolute;
+left:0;
+right:0;
+
+display:flex;
+align-items:center;
+justify-content:center;
+
+z-index:3000;
+
+opacity:0;
+
+transition:opacity 1s ease;
+
+white-space:pre-wrap;
+overflow:hidden;
+
+}
+
+.bannerContent{
+display:flex;
+flex-direction:column;
+align-items:center;
+justify-content:center;
+text-align:center;
+width:100%;
+padding:0 12px;
+box-sizing:border-box;
+overflow:hidden;
+}
+
+</style>
+
+</head>
+
+
+<body>
+
+<div id="debugOverlay"></div>
+<div id="laneDebugOverlay"></div>
+
+<div id="wallBackground" aria-hidden="true"><img alt=""></div>
+
+<div id="connectionStatus"></div>
+
+<div id="banner"></div>
+
+<div id="qrContainer">
+<div id="qrCode"></div>
+<div id="qrText"></div>
+</div>
+
+
+
+<script>
+
+let images=[]
+let videos=[]
+let imageHighlightQueue=[]
+let videoHighlightQueue=[]
+let highlightWorkerRunning=false
+
+let knownFiles=new Set()
+
+let config={}
+
+let imageSlideshowTimer = null
+let videoSlideshowTimer = null
+let qrTimer = null
+let bannerTimer = null
+
+let currentImages=0
+let currentVideos=0
+let currentImageHighlights=0
+let currentVideoHighlights=0
+let currentCenterHighlights=0
+let wallStartTime = Date.now()
+
+let debugLogs=[]
+let reservedImages=new Set()
+let reservedVideos=new Set()
+let spawnLaneCursor=-1
+let burstOriginTime=Date.now()
+let burstDebugRaf=0
+let spawnFlashTimer=0
+
+function spawnMode(){
+let m=String(config.spawn_mode||"lanes").toLowerCase()
+if(m==="burst"||m==="random") return m
+return "lanes"
+}
+
+function spawnLaneCount(){
+let n=parseInt(config.spawn_lane_count,10)
+if(isNaN(n)) n=6
+return Math.max(1, Math.min(20, n))
+}
+
+function spawnMaxFrameSize(){
+let img=parseInt(config.image_max_size,10)
+let vid=parseInt(config.video_max_size,10)
+if(isNaN(img)) img=150
+if(isNaN(vid)) vid=150
+return Math.max(1, img, vid)
+}
+
+function spawnLaneCenter(i){
+let laneCount=spawnLaneCount()
+let margin=spawnMaxFrameSize()/2
+let inner=Math.max(0, window.innerWidth-2*margin)
+if(laneCount<=1) return margin+inner/2
+return margin+(i/(laneCount-1))*inner
+}
+
+function spawnLaneLeft(i, size){
+return spawnLaneCenter(i)-size/2
+}
+
+function burstPeriodSec(){
+let p=parseFloat(config.spawn_burst_period)
+if(isNaN(p)) p=1
+return Math.max(0.1, Math.round(p*10)/10)
+}
+
+function burstAngleDeg(){
+let t=(Date.now()-burstOriginTime)/1000
+let deg=(t/burstPeriodSec())*180
+return Math.round(deg*10)/10
+}
+
+function burstCenterX(){
+return window.innerWidth*(0.5+0.5*Math.sin(burstAngleDeg()*Math.PI/180))
+}
+
+function burstSpawnLeft(size){
+return burstCenterX()-size/2
+}
+
+function typicalSpawnSize(){
+let minS=parseInt(config.image_min_size,10)
+let maxS=parseInt(config.image_max_size,10)
+if(isNaN(minS)) minS=100
+if(isNaN(maxS)) maxS=150
+return (minS+maxS)/2
+}
+
+function pickSpawnX(size){
+let mode=spawnMode()
+if(mode==="random"){
+let maxX=Math.max(0, window.innerWidth-size)
+if(maxX<=1) return 0
+return Math.random()*maxX
+}
+if(mode==="burst") return burstSpawnLeft(size)
+let maxX=Math.max(0, window.innerWidth-size)
+let laneCount=spawnLaneCount()
+let order=String(config.spawn_lane_order||"random_apart").toLowerCase()
+if(order!=="random" && order!=="adjacent" && order!=="random_apart") order="random_apart"
+if(spawnLaneCursor>=laneCount) spawnLaneCursor=-1
+function laneX(i){
+return spawnLaneLeft(i, size)
+}
+let occupied=[]
+document.querySelectorAll(".photoFrame").forEach(f=>{
+let r=f.getBoundingClientRect()
+if(r.bottom<-20 || r.top>window.innerHeight+20) return
+occupied.push({left:r.left, right:r.right, cx:(r.left+r.right)/2})
+})
+let minGap=Math.max(24, size*0.2)
+function tooClose(x){
+let left=x-minGap, right=x+size+minGap
+for(let i=0;i<occupied.length;i++){
+let o=occupied[i]
+if(right>o.left && left<o.right) return true
+}
+return false
+}
+function farthestFromOccupied(indices){
+let best=indices[0], bestD=-1
+for(let n=0;n<indices.length;n++){
+let i=indices[n]
+let cx=laneX(i)+size/2
+let d=occupied.length?Math.min.apply(null, occupied.map(o=>Math.abs(cx-o.cx))):maxX
+if(d>bestD){ bestD=d; best=i }
+}
+return best
+}
+function pickFrom(indices){
+if(!indices.length) return 0
+let free=indices.filter(i=>!tooClose(laneX(i)))
+if(free.length) return free[Math.floor(Math.random()*free.length)]
+return farthestFromOccupied(indices)
+}
+function allLanes(){
+let a=[]
+for(let i=0;i<laneCount;i++) a.push(i)
+return a
+}
+let chosenLane=0
+if(laneCount<=1){
+chosenLane=0
+}else if(order==="adjacent"){
+let start=spawnLaneCursor<0?0:(spawnLaneCursor+1)%laneCount
+let seq=[]
+for(let n=0;n<laneCount;n++) seq.push((start+n)%laneCount)
+let free=seq.filter(i=>!tooClose(laneX(i)))
+chosenLane=free.length?free[0]:farthestFromOccupied(seq)
+}else if(order==="random_apart"){
+let apart=allLanes()
+if(spawnLaneCursor>=0) apart=apart.filter(i=>Math.abs(i-spawnLaneCursor)>1)
+if(!apart.length){
+let bestDelta=0
+let far=[]
+for(let i=0;i<laneCount;i++){
+if(i===spawnLaneCursor) continue
+let d=Math.abs(i-spawnLaneCursor)
+if(d>bestDelta){ bestDelta=d; far=[i] }
+else if(d===bestDelta) far.push(i)
+}
+apart=far.length?far:allLanes()
+}else{
+let notSame=apart.filter(i=>i!==spawnLaneCursor)
+if(notSame.length) apart=notSame
+}
+chosenLane=pickFrom(apart)
+}else{
+chosenLane=pickFrom(allLanes())
+}
+spawnLaneCursor=chosenLane
+let chosen=laneX(chosenLane)
+let usable=Math.max(0, window.innerWidth-spawnMaxFrameSize())
+let laneSpan=laneCount<=1?usable:usable/Math.max(1, laneCount-1)
+let jitter=(Math.random()-0.5)*laneSpan*0.2
+return Math.max(0, Math.min(maxX, chosen+jitter))
+}
+
+let serverStateChannel=null
+let serverOnline=true
+let cachedImages=new Set()
+let wakeLockSentinel=null
+let wakeLockActive=false
+let altWakeLockVideo=null
+let altWakeLockCanvas=null
+let altWakeLockActive=false
+let altWakeLockTick=null
+let lastConnectionBroadcast=0
+const CONNECTION_BROADCAST_DEBOUNCE_MS=500
+
+function setConnection(state){
+
+let icon=document.getElementById("connectionStatus")
+
+if(!icon) return
+
+serverOnline=state==="online"
+
+if(state==="online"){
+
+icon.style.background="lime"
+
+setTimeout(()=>{
+icon.style.opacity=0
+},5000)
+
+processHighlightQueue()
+
+}else{
+
+icon.style.opacity=1
+icon.style.background="red"
+
+}
+
+if(config&&config.cache_enabled){
+if(!serverStateChannel) serverStateChannel=new BroadcastChannel("wall-server-state")
+const now=Date.now()
+if(now-lastConnectionBroadcast<CONNECTION_BROADCAST_DEBOUNCE_MS) return
+lastConnectionBroadcast=now
+serverStateChannel.postMessage({state:state})
+}
+
+}
+
+const imageTypes=["jpg","jpeg","png","webp","gif"]
+const videoTypes=["mp4","mov","webm"]
+
+let ws=null
+let reconnectTimeout=null
+
+function connectWebSocket(){
+
+ws=new WebSocket(
+(location.protocol==="https:"?"wss://":"ws://")+location.host+"/ws"
+)
+
+ws.onopen = () => {
+
+setConnection("online")
+sendStats()
+
+}
+
+ws.onclose = () => {
+
+setConnection("offline")
+if(reconnectTimeout) clearTimeout(reconnectTimeout)
+reconnectTimeout=setTimeout(()=>{
+reconnectTimeout=null
+connectWebSocket()
+},3000)
+
+}
+
+ws.onerror = () => {
+
+setConnection("offline")
+
+}
+
+function sendStats(){
+if(ws && ws.readyState===WebSocket.OPEN){
+try{ ws.send(JSON.stringify({type:"stats",images:currentImages,videos:currentVideos})) }catch(e){}
+}
+}
+setInterval(sendStats,5000)
+
+function markFromCache(file){
+if(!config.debug_overlay) return
+const fn=(file||"").split("?")[0]
+function tryMark(){
+document.querySelectorAll(".photoFrame[data-file]").forEach(f=>{
+if((f.dataset.file||"").split("?")[0]===fn) f.classList.add("from-cache")
+})
+}
+tryMark()
+setTimeout(tryMark,100)
+setTimeout(tryMark,400)
+}
+let lastCacheLog={}
+const CACHE_LOG_DEBOUNCE_MS=1000
+if("serviceWorker"in navigator){
+navigator.serviceWorker.addEventListener("message",e=>{
+if(e.data&&e.data.type==="cache_serve"){
+const key="serve:"+e.data.file
+if(Date.now()-(lastCacheLog[key]||0)<CACHE_LOG_DEBOUNCE_MS) return
+lastCacheLog[key]=Date.now()
+addDebugLog("Cache geladen: "+e.data.file+(e.data.expired?" (abgelaufen)":""))
+cachedImages.add((e.data.file||"").split("?")[0])
+markFromCache(e.data.file)
+}else if(e.data&&e.data.type==="cache_store"){
+const key="store:"+e.data.file
+if(Date.now()-(lastCacheLog[key]||0)<CACHE_LOG_DEBOUNCE_MS) return
+lastCacheLog[key]=Date.now()
+addDebugLog("Cache gespeichert: "+e.data.file)
+cachedImages.add((e.data.file||"").split("?")[0])
+}else if(e.data&&e.data.type==="cache_list"){
+const list=e.data.files||[]
+list.forEach(f=>cachedImages.add((f||"").split("?")[0]))
+if(config.debug_overlay&&list.length>0){
+const key="cache_list"
+if(Date.now()-(lastCacheLog[key]||0)<CACHE_LOG_DEBOUNCE_MS) return
+lastCacheLog[key]=Date.now()
+addDebugLog("Cache-Liste: "+list.length+" Bilder verfügbar")
+}
+}
+})
+}
+ws.onmessage=async(event)=>{
+
+let msg=event.data
+
+if(msg==="__config_reload__"){
+location.reload()
+return
+}
+if(msg==="__config_updated__"){
+await loadConfig()
+return
+}
+if(typeof msg==="string" && msg.indexOf("__hide__:")===0){
+hideMedia(msg.slice(9))
+return
+}
+
+addMedia(msg)
+
+let ext=msg.split(".").pop().toLowerCase()
+let isVid=videoTypes.includes(ext)
+if(isVid && config.video_highlight_new){
+videoHighlightQueue.push(msg)
+processHighlightQueue()
+}else if(!isVid && config.image_highlight_new){
+imageHighlightQueue.push(msg)
+processHighlightQueue()
+}
+
+}
+
+}
+
+
+
+function addMedia(file){
+
+if(!file || file.indexOf("__")===0) return
+if(knownFiles.has(file)) return
+
+knownFiles.add(file)
+
+let ext=file.split(".").pop().toLowerCase()
+
+if(videoTypes.includes(ext))
+videos.push(file)
+else
+images.push(file)
+
+}
+
+function hideMedia(file){
+if(!file) return
+knownFiles.delete(file)
+images=images.filter(f=>f!==file)
+videos=videos.filter(f=>f!==file)
+imageHighlightQueue=imageHighlightQueue.filter(f=>f!==file)
+videoHighlightQueue=videoHighlightQueue.filter(f=>f!==file)
+reservedImages.delete(file)
+reservedVideos.delete(file)
+document.querySelectorAll(".photoFrame[data-file]").forEach(frame=>{
+if((frame.dataset.file||"").split("?")[0]!==file) return
+frame.querySelectorAll("img,video").forEach(el=>{ el.removeAttribute("src"); el.src="" })
+frame.remove()
+})
+let nI=0, nV=0, nHi=0, nHv=0, nC=0
+document.querySelectorAll(".photoFrame").forEach(frame=>{
+let isVid=!!frame.querySelector("video")
+if(isVid) nV++; else nI++
+if(frame.classList.contains("highlight")){
+if(isVid) nHv++; else nHi++
+}
+})
+currentImages=nI
+currentVideos=nV
+currentImageHighlights=nHi
+currentVideoHighlights=nHv
+currentCenterHighlights=Math.min(currentCenterHighlights, nHi+nHv)
+addDebugLog("hidden from wall: "+file)
+}
+
+function stopBurstDebug(){
+if(burstDebugRaf){
+cancelAnimationFrame(burstDebugRaf)
+burstDebugRaf=0
+}
+}
+
+function hideSpawnDebug(){
+stopBurstDebug()
+let overlay=document.getElementById("laneDebugOverlay")
+if(!overlay) return
+overlay.style.display="none"
+overlay.innerHTML=""
+overlay.dataset.key=""
+}
+
+function paintBurstDebug(){
+let overlay=document.getElementById("laneDebugOverlay")
+if(!overlay) return
+let cx=burstCenterX()
+let line=overlay.querySelector(".burstDebugLine")
+if(!line){
+overlay.innerHTML=""
+overlay.dataset.key="burst"
+line=document.createElement("div")
+line.className="laneDebugLine burstDebugLine"
+let label=document.createElement("span")
+label.className="laneDebugLabel"
+line.appendChild(label)
+overlay.appendChild(line)
+}
+line.style.left=Math.round(cx)+"px"
+let deg=((burstAngleDeg()%360)+360)%360
+let movingRight=Math.cos(burstAngleDeg()*Math.PI/180)>=0
+line.querySelector(".laneDebugLabel").textContent="Burst "+deg.toFixed(1)+"° "+(movingRight?"→":"←")
+overlay.style.display="block"
+}
+
+function tickBurstDebug(){
+burstDebugRaf=0
+if(!config.debug_overlay || spawnMode()!=="burst") return
+paintBurstDebug()
+burstDebugRaf=requestAnimationFrame(tickBurstDebug)
+}
+
+function updateLaneDebug(){
+let overlay=document.getElementById("laneDebugOverlay")
+if(!overlay) return
+if(!config.debug_overlay){
+hideSpawnDebug()
+return
+}
+let mode=spawnMode()
+if(mode==="random"){
+stopBurstDebug()
+overlay.style.display="none"
+overlay.innerHTML=""
+overlay.dataset.key="random"
+return
+}
+if(mode==="burst"){
+if(!burstDebugRaf) burstDebugRaf=requestAnimationFrame(tickBurstDebug)
+return
+}
+stopBurstDebug()
+let laneCount=spawnLaneCount()
+let key="lanes|"+laneCount+"|"+spawnMaxFrameSize()+"|"+window.innerWidth
+if(overlay.dataset.key===key){
+overlay.style.display="block"
+return
+}
+overlay.dataset.key=key
+overlay.innerHTML=""
+for(let i=0;i<laneCount;i++){
+let cx=spawnLaneCenter(i)
+let line=document.createElement("div")
+line.className="laneDebugLine"
+line.dataset.lane=String(i)
+line.style.left=Math.round(cx)+"px"
+let label=document.createElement("span")
+label.className="laneDebugLabel"
+label.textContent=String(i+1)
+line.appendChild(label)
+overlay.appendChild(line)
+}
+overlay.style.display="block"
+}
+
+function flashSpawnDebug(){
+if(!config.debug_overlay) return
+let mode=spawnMode()
+if(mode!=="lanes" && mode!=="burst") return
+if(mode==="burst") paintBurstDebug()
+else updateLaneDebug()
+let overlay=document.getElementById("laneDebugOverlay")
+if(!overlay) return
+let target=null
+if(mode==="burst") target=overlay.querySelector(".burstDebugLine")
+else if(spawnLaneCursor>=0) target=overlay.querySelector('.laneDebugLine[data-lane="'+spawnLaneCursor+'"]')
+if(!target) return
+overlay.querySelectorAll(".spawnFlash").forEach(el=>el.classList.remove("spawnFlash"))
+target.classList.add("spawnFlash")
+clearTimeout(spawnFlashTimer)
+spawnFlashTimer=setTimeout(()=>{
+target.classList.remove("spawnFlash")
+},500)
+}
+
+function updateDebug(){
+
+let box=document.getElementById("debugOverlay")
+
+document.body.classList.toggle("debug-mode",!!config.debug_overlay)
+document.querySelectorAll(".frameDebugFilename").forEach(el=>{el.style.display=config.debug_overlay?"block":"none"})
+updateLaneDebug()
+
+if(!config.debug_overlay){
+box.style.display="none"
+return
+}
+
+box.style.display="block"
+
+let cacheOn=config.cache_enabled?"aktiv":"aus"
+let cacheTtl=config.cache_ttl_minutes||30
+let wakeLockEnabled=config.screen_wake_lock_enabled
+let altWakeEnabled=config.screen_wake_lock_alternative
+let wakeLockStatus="aus"
+if(wakeLockEnabled&&wakeLockActive) wakeLockStatus="aktiv (Wake Lock)"
+else if(altWakeEnabled&&altWakeLockActive) wakeLockStatus="aktiv (Alternative)"
+else if(wakeLockEnabled) wakeLockStatus="aktiv (Wake Lock, API nicht verfügbar)"
+else if(altWakeEnabled) wakeLockStatus="aktiv (Alternative, nicht verfügbar)"
+let order=String(config.spawn_lane_order||"random_apart")
+let orderLabel=order==="adjacent"?"nebeneinander":(order==="random"?"zufällig":"niemals nebeneinander")
+let mode=spawnMode()
+let spawnLabel=mode==="burst"?("Burst "+burstPeriodSec()+" s L→R"):(mode==="random"?"Zufall":("Bahnen: "+spawnLaneCount()+" ("+orderLabel+")"))
+box.innerHTML =
+"Images: "+currentImages+" (max: "+config.max_images_on_screen+")<br>"+
+"Videos: "+currentVideos+" (max: "+config.max_videos_on_screen+")<br>"+
+"ImageHighlights: "+currentImageHighlights+" (Queue: "+imageHighlightQueue.length+")<br>"+
+"VideoHighlights: "+currentVideoHighlights+" (Queue: "+videoHighlightQueue.length+")<br>"+
+"CenterHighlights: "+currentCenterHighlights+"<br>"+
+"Spawn: "+spawnLabel+"<br>"+
+"Cache: "+cacheOn+(config.cache_enabled?" (TTL "+cacheTtl+"min)":"")+"<br>"+
+"Bildschirm wach: "+wakeLockStatus
+
+if(debugLogs.length){
+box.innerHTML += "<br>Log:<br>"+debugLogs.join("<br>")
+}
+
+}
+
+function addDebugLog(msg){
+
+if(!config.debug_overlay) return
+
+let elapsed = ((Date.now()-wallStartTime)/1000).toFixed(1)
+let line = "["+elapsed+"s] "+msg
+
+if(debugLogs.length>0&&debugLogs[debugLogs.length-1].replace(/\[\d+\.\d+s\] /,"")===msg) return
+
+debugLogs.push(line)
+if(debugLogs.length>10) debugLogs.shift()
+
+console.log("[WALL DEBUG]",line)
+
+}
+
+
+async function loadImages(){
+
+let res=await fetch("/api/images")
+let files=await res.json()
+
+for(let f of files) addMedia(f)
+
+}
+
+
+
+async function updateCacheSw(){
+if(config.cache_enabled&&"serviceWorker"in navigator){
+try{
+await navigator.serviceWorker.register("/sw.js?t="+Date.now(),{scope:"/"})
+addDebugLog("Cache SW registriert (TTL "+(config.cache_ttl_minutes||30)+"min)")
+console.log("[WALL] Cache SW registriert")
+}catch(e){ addDebugLog("Cache SW Fehler: "+e.message); console.error("[WALL] Cache SW:",e) }
+}else if("serviceWorker"in navigator){
+try{
+let regs=await navigator.serviceWorker.getRegistrations()
+for(let r of regs) await r.unregister()
+addDebugLog("Cache SW deaktiviert")
+console.log("[WALL] Cache SW deaktiviert")
+}catch(e){}
+}
+}
+
+async function loadConfig(){
+
+let res=await fetch("/api/config")
+config=await res.json()
+spawnLaneCursor=-1
+burstOriginTime=Date.now()
+stopBurstDebug()
+if(imageSlideshowTimer) clearInterval(imageSlideshowTimer)
+if(videoSlideshowTimer) clearInterval(videoSlideshowTimer)
+if(qrTimer) clearInterval(qrTimer)
+if(bannerTimer) clearInterval(bannerTimer)
+
+applyFrameStyle()
+applyBackground()
+loadCommentFont()
+setupQR()
+setupBanner()
+await updateCacheSw()
+
+// Slideshow-Timer nach Config-Änderung neu starten
+imageSlideshowTimer = setInterval(showRandomImage,config.image_spawn_interval*1000)
+videoSlideshowTimer = setInterval(showRandomVideo,config.video_spawn_interval*1000)
+updateLaneDebug()
+
+}
+
+
+
+function applyFrameStyle(){
+
+let style=document.createElement("style")
+
+style.innerHTML=`
+
+.photoFrame{
+
+padding:${config.frame_padding_top||0}px ${config.frame_padding_side||0}px ${config.frame_padding_bottom||0}px ${config.frame_padding_side||0}px;
+
+}
+
+`
+
+document.head.appendChild(style)
+
+}
+
+async function applyWakeLock(){
+let enabled=config.screen_wake_lock_enabled
+let altEnabled=config.screen_wake_lock_alternative
+
+if(!altEnabled){
+if(altWakeLockVideo){ altWakeLockVideo.pause(); altWakeLockVideo.srcObject=null; altWakeLockVideo.remove(); altWakeLockVideo=null }
+if(altWakeLockCanvas){ altWakeLockCanvas.remove(); altWakeLockCanvas=null }
+if(altWakeLockTick){ cancelAnimationFrame(altWakeLockTick); altWakeLockTick=null }
+altWakeLockActive=false
+}
+
+if(!enabled){
+if(wakeLockSentinel){ try{ await wakeLockSentinel.release() }catch(e){} wakeLockSentinel=null }
+wakeLockActive=false
+}else{
+if(!navigator.wakeLock){ wakeLockActive=false }
+else if(document.visibilityState==="visible"){
+try{
+wakeLockSentinel=await navigator.wakeLock.request("screen")
+wakeLockActive=true
+wakeLockSentinel.addEventListener("release",()=>{ wakeLockActive=false })
+}catch(e){ wakeLockActive=false }
+}
+}
+
+if(altEnabled&&typeof HTMLCanvasElement!=="undefined"&&HTMLCanvasElement.prototype.captureStream){
+if(altWakeLockVideo) return
+try{
+let canvas=document.createElement("canvas")
+canvas.width=2
+canvas.height=2
+canvas.style.cssText="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;"
+document.body.appendChild(canvas)
+let ctx=canvas.getContext("2d")
+let stream=canvas.captureStream(1)
+let video=document.createElement("video")
+video.srcObject=stream
+video.muted=true
+video.autoplay=true
+video.playsInline=true
+video.setAttribute("playsinline","")
+video.style.cssText="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;"
+document.body.appendChild(video)
+video.play().catch(()=>{})
+altWakeLockVideo=video
+altWakeLockCanvas=canvas
+altWakeLockActive=true
+function tick(){
+if(!altWakeLockCanvas) return
+ctx.fillStyle="#000"
+ctx.fillRect(0,0,2,2)
+altWakeLockTick=requestAnimationFrame(tick)
+}
+tick()
+}catch(e){ altWakeLockActive=false }
+}
+}
+document.addEventListener("visibilitychange",async()=>{
+if(document.visibilityState==="visible"&&config.screen_wake_lock_enabled&&navigator.wakeLock){
+try{
+wakeLockSentinel=await navigator.wakeLock.request("screen")
+wakeLockActive=true
+wakeLockSentinel.addEventListener("release",()=>{ wakeLockActive=false })
+}catch(e){ wakeLockActive=false }
+}
+})
+
+function applyBackground(){
+if(window.applyWallBackground){
+applyWallBackground(document.getElementById("wallBackground"), config)
+}
+}
+
+
+
+function loadCommentFont(){
+if(window.COMMENT_FONTS && COMMENT_FONTS.loadOne){
+COMMENT_FONTS.loadOne(config.comment_font, "commentFontLink")
+COMMENT_FONTS.loadOne(config.banner_font, "bannerFontLink")
+return
+}
+let old=document.getElementById("commentFontLink")
+if(old) old.remove()
+let font=config.comment_font
+if(!font) return
+let link=document.createElement("link")
+link.id="commentFontLink"
+link.rel="stylesheet"
+link.href="https://fonts.googleapis.com/css2?family="+encodeURIComponent(font).replace(/%20/g,"+")+"&display=swap"
+document.head.appendChild(link)
+}
+
+
+
+function setupQR(){
+
+let box=document.getElementById("qrContainer")
+
+if(!config.show_qr_code){
+
+box.style.display="none"
+return
+
+}
+
+box.style.display="block"
+
+
+fetch("/api/upload_url")
+.then(r=>r.json())
+.then(data=>{
+
+let qrBox=document.getElementById("qrCode")
+qrBox.innerHTML=""
+
+new QRCode(qrBox,{
+
+text:data.url,
+width:config.qr_size,
+height:config.qr_size
+
+})
+
+})
+
+
+let text=document.getElementById("qrText")
+
+text.innerText=config.qr_text
+text.style.color=config.qr_text_color
+text.style.fontSize=config.qr_text_size+"px"
+
+
+setQRPosition()
+
+if(config.qr_dynamic_enabled){
+
+cycleQR()
+
+}
+
+}
+
+
+
+function setQRPosition(){
+
+let box=document.getElementById("qrContainer")
+
+let p=config.qr_position
+
+box.style.top=""
+box.style.bottom=""
+box.style.left=""
+box.style.right=""
+box.style.transform=""
+
+if(p==="center-bottom"){
+
+box.style.left="50%"
+box.style.bottom="20px"
+box.style.transform="translateX(-50%)"
+
+}
+
+if(p==="top-left"){
+
+box.style.top="20px"
+box.style.left="20px"
+
+}
+
+if(p==="top-right"){
+
+box.style.top="20px"
+box.style.right="20px"
+
+}
+
+if(p==="bottom-left"){
+
+box.style.bottom="20px"
+box.style.left="20px"
+
+}
+
+if(p==="bottom-right"){
+
+box.style.bottom="20px"
+box.style.right="20px"
+
+}
+
+}
+
+
+
+function cycleQR(){
+
+let box=document.getElementById("qrContainer")
+
+if(qrTimer) clearInterval(qrTimer)
+
+qrTimer = setInterval(()=>{
+
+let elapsed=(Date.now()-wallStartTime)/1000
+
+let cycle=config.qr_show_duration+config.qr_hide_duration
+
+let phase=elapsed%cycle
+
+if(phase<config.qr_show_duration){
+box.style.opacity=1
+}else{
+box.style.opacity=0
+}
+
+},500)
+
+}
+
+
+
+function setupBanner(){
+
+let banner=document.getElementById("banner")
+
+if(!config.banner_enabled){
+
+banner.style.display="none"
+return
+
+}
+
+banner.style.display="flex"
+
+banner.style.background=config.banner_color
+banner.style.color=config.banner_text_color
+banner.style.height=config.banner_height+"px"
+banner.style.setProperty("--banner-h",(config.banner_height||120)+"px")
+let align=(window.COMMENT_FONTS&&COMMENT_FONTS.align)?COMMENT_FONTS.align(config.banner_align):"center"
+banner.style.justifyContent=align==="left"?"flex-start":align==="right"?"flex-end":"center"
+let bannerFont=config.banner_font||"Arial"
+banner.style.fontFamily=(window.COMMENT_FONTS&&COMMENT_FONTS.stack)?COMMENT_FONTS.stack(bannerFont):bannerFont
+
+banner.innerHTML = "<div class='bannerContent is-"+align+"'>" + ((window.simpleMd&&simpleMd.mdToHtml)?simpleMd.mdToHtml(config.banner_text):marked.parse(config.banner_text||"")) + "</div>"
+
+if(config.banner_position==="top"){
+
+banner.style.top=0
+
+}
+
+if(config.banner_position==="bottom"){
+
+banner.style.bottom=0
+
+}
+
+if(window.fitBannerText){
+fitBannerText(banner, banner.querySelector(".bannerContent"))
+}
+
+cycleBanner()
+
+}
+
+window.addEventListener("resize", function(){
+updateLaneDebug()
+let banner=document.getElementById("banner")
+if(!banner || banner.style.display==="none") return
+if(window.fitBannerText) fitBannerText(banner, banner.querySelector(".bannerContent"))
+})
+
+
+
+function cycleBanner(){
+
+let banner=document.getElementById("banner")
+
+if(bannerTimer) clearInterval(bannerTimer)
+
+bannerTimer = setInterval(()=>{
+
+let elapsed=(Date.now()-wallStartTime)/1000
+
+let cycle=config.banner_show_duration+config.banner_hide_duration
+
+let phase=elapsed%cycle
+
+if(phase<config.banner_show_duration){
+banner.style.opacity=1
+}else{
+banner.style.opacity=0
+}
+
+},500)
+
+}
+
+
+
+function processHighlightQueue(){
+
+if(highlightWorkerRunning) return
+if(!serverOnline) return
+
+highlightWorkerRunning=true
+
+let imageMax=config.image_max_simultaneous_highlights||3
+let videoMax=config.video_max_simultaneous_highlights||3
+let centerMax=config.center_highlight_max_simultaneous||1
+let centerLimit=config.center_highlight_enabled?(currentCenterHighlights>=centerMax):false
+
+while(
+currentImageHighlights<imageMax &&
+imageHighlightQueue.length>0 &&
+currentImages<config.max_images_on_screen &&
+!centerLimit
+){
+
+let file=imageHighlightQueue.shift()
+currentImageHighlights++
+if(config.center_highlight_enabled) currentCenterHighlights++
+spawnMedia(file,true)
+centerLimit=config.center_highlight_enabled&&(currentCenterHighlights>=centerMax)
+
+}
+
+while(
+currentVideoHighlights<videoMax &&
+videoHighlightQueue.length>0 &&
+currentVideos<config.max_videos_on_screen &&
+!centerLimit
+){
+
+let file=videoHighlightQueue.shift()
+currentVideoHighlights++
+if(config.center_highlight_enabled) currentCenterHighlights++
+spawnMedia(file,true)
+centerLimit=config.center_highlight_enabled&&(currentCenterHighlights>=centerMax)
+
+}
+
+highlightWorkerRunning=false
+
+}
+
+
+
+function getDisplayedMedia(){
+let files=new Set()
+document.querySelectorAll(".photoFrame[data-file]").forEach(f=>{ let v=f.dataset.file; if(v) files.add(v) })
+return files
+}
+function chooseRandomImage(){
+if(images.length===0) return null
+let displayed=getDisplayedMedia()
+let pool=images
+if(config.cache_enabled&&!serverOnline&&cachedImages.size>0){
+pool=images.filter(f=>cachedImages.has(f.split("?")[0]))
+if(pool.length===0) return null
+}
+let available=pool.filter(f=>!displayed.has(f)&&!reservedImages.has(f))
+if(available.length===0) return null
+let chosen=available[Math.floor(Math.random()*available.length)]
+reservedImages.add(chosen)
+return chosen
+}
+function chooseRandomVideo(){
+if(videos.length===0) return null
+let displayed=getDisplayedMedia()
+let pool=videos
+if(config.cache_enabled&&!serverOnline&&cachedImages.size>0){
+pool=videos.filter(f=>cachedImages.has(f.split("?")[0]))
+if(pool.length===0) return null
+}
+let available=pool.filter(f=>!displayed.has(f)&&!reservedVideos.has(f))
+if(available.length===0) return null
+let chosen=available[Math.floor(Math.random()*available.length)]
+reservedVideos.add(chosen)
+return chosen
+}
+
+
+function showRandomImage(){
+
+if(currentImages>=config.max_images_on_screen) return
+
+let file = chooseRandomImage()
+
+if(!file) return
+
+spawnMedia(file,false)
+
+}
+
+function showRandomVideo(){
+
+if(currentVideos>=config.max_videos_on_screen) return
+
+let file = chooseRandomVideo()
+
+if(!file) return
+
+spawnMedia(file,false)
+
+}
+
+
+
+function spawnMedia(file,isHighlight=false){
+
+if(!file) return
+if(!images.includes(file) && !videos.includes(file)) return
+
+let ext=file.split(".").pop().toLowerCase()
+
+let isVideo = videoTypes.includes(ext)
+
+if(isVideo){
+
+if(currentVideos>=config.max_videos_on_screen) return
+
+}else{
+
+if(currentImages>=config.max_images_on_screen) return
+
+}
+
+addDebugLog("spawn "+(isVideo?"video":"image")+": "+file)
+
+
+let frame=document.createElement("div")
+frame.classList.add("photoFrame")
+frame.dataset.file=file
+
+let cfg=isVideo?{
+drift_strength:config.video_drift_strength,
+rotation_strength:config.video_rotation_strength,
+rotation_direction_mode:config.video_rotation_direction_mode,
+animation_duration:config.video_animation_duration,
+speed_variation_enabled:config.video_speed_variation_enabled,
+speed_variation_strength:config.video_speed_variation_strength,
+highlight_duration:config.video_highlight_duration,
+highlight_color:config.video_highlight_color,
+flight_path_mode:config.video_flight_path_mode||"random"
+}:{
+drift_strength:config.image_drift_strength,
+rotation_strength:config.image_rotation_strength,
+rotation_direction_mode:config.image_rotation_direction_mode,
+animation_duration:config.image_animation_duration,
+speed_variation_enabled:config.image_speed_variation_enabled,
+speed_variation_strength:config.image_speed_variation_strength,
+highlight_duration:config.image_highlight_duration,
+highlight_color:config.image_highlight_color,
+flight_path_mode:config.image_flight_path_mode||"random"
+}
+
+let drift=(Math.random()*2-1)*(window.innerWidth*(cfg.drift_strength||0.2))
+function finiteNumber(value, fallback){
+let n=Number(value)
+return Number.isFinite(n)?n:fallback
+}
+let rotRange=Math.max(0, finiteNumber(cfg.rotation_strength, 90))
+let rot=Math.random()*rotRange
+if(cfg.rotation_direction_mode==="left") rot=-Math.abs(rot)
+if(cfg.rotation_direction_mode==="right") rot=Math.abs(rot)
+if(cfg.rotation_direction_mode==="both") rot=(Math.random()<0.5?-1:1)*rot
+let duration=cfg.animation_duration||30
+if(cfg.speed_variation_enabled) duration=duration*(1+(Math.random()*2-1)*(cfg.speed_variation_strength||0.4))
+
+let element
+let exitWatcherStarted = false
+
+function frameClearance(){
+let w=frame.offsetWidth||size
+let h=frame.offsetHeight||size
+return Math.hypot(w,h)+80
+}
+
+function stopFrameTransition(){
+frame.style.transition="none"
+}
+
+function flyStartTransform(){
+return "translate(0px, 0px) rotate(0deg)"
+}
+
+function flyOffscreenTransform(){
+let startTop=parseFloat(frame.style.top)
+if(Number.isNaN(startTop)) startTop=window.innerHeight
+return "translate("+drift+"px,"+(-(startTop+frameClearance()))+"px) rotate("+rot+"deg)"
+}
+
+function beginCssFly(){
+stopFrameTransition()
+frame.style.transform=flyStartTransform()
+void frame.offsetWidth
+frame.style.transition="transform "+(duration*1000)+"ms linear"
+frame.style.transform=flyOffscreenTransform()
+}
+
+function startFlight(){
+if(cfg.flight_path_mode==="bounce"){
+startBounceFlight(startX, window.innerHeight, size, duration, rot)
+}else{
+beginCssFly()
+}
+}
+
+function startBounceFlight(startX, startY, size, durationSec, rot){
+
+stopFrameTransition()
+let x = startX
+let y = startY
+let totalDist = startY + frameClearance()
+let velocityY = totalDist / durationSec
+let velocityX = (window.innerWidth * (cfg.drift_strength||0.2)) / durationSec
+if(drift<0) velocityX = -velocityX
+let lastTime = performance.now()
+
+function step(now){
+
+if(!document.body.contains(frame)) return
+
+let dt = (now - lastTime) / 1000
+lastTime = now
+
+x += velocityX * dt
+y -= velocityY * dt
+
+let rect = frame.getBoundingClientRect()
+let w = rect.width
+let h = rect.height
+
+if(x <= 0){ velocityX = Math.abs(velocityX); x = 0 }
+if(x + w >= window.innerWidth){ velocityX = -Math.abs(velocityX); x = window.innerWidth - w }
+
+frame.style.left = x + "px"
+frame.style.top = y + "px"
+frame.style.transform = "rotate("+rot+"deg)"
+
+if(y + h < -50) return
+
+requestAnimationFrame(step)
+}
+
+requestAnimationFrame(step)
+}
+
+function startExitWatcher(){
+
+if(exitWatcherStarted) return
+exitWatcherStarted = true
+
+function check(){
+
+if(!document.body.contains(frame)){
+    return
+}
+
+let rect = frame.getBoundingClientRect()
+
+// Entfernen, sobald der Frame klar außerhalb des sichtbaren Bereichs liegt
+if(
+    rect.bottom < -50 ||                    // komplett über dem Bildschirm
+    rect.top    > window.innerHeight + 50 ||// weit unterhalb
+    rect.right  < -50 ||                    // weit links draußen
+    rect.left   > window.innerWidth + 50    // weit rechts draußen
+){
+
+    // Positionsbasierter Exit jetzt für Bilder und Videos
+    if(videoTypes.includes(ext)) reservedVideos.delete(file); else reservedImages.delete(file)
+    frame.remove()
+
+    if(!videoTypes.includes(ext)) currentImages = Math.max(0, currentImages-1)
+    if(videoTypes.includes(ext))  currentVideos = Math.max(0, currentVideos-1)
+
+    addDebugLog(
+        "removed "+(videoTypes.includes(ext)?"video":"image")+" after leaving screen: "+file+
+        " rect="+JSON.stringify({
+          top:Math.round(rect.top),
+          bottom:Math.round(rect.bottom),
+          left:Math.round(rect.left),
+          right:Math.round(rect.right)
+        })
+    )
+
+    return
+}
+
+requestAnimationFrame(check)
+}
+
+requestAnimationFrame(check)
+}
+
+if(isVideo){
+
+element=document.createElement("video")
+
+
+element.autoplay=true
+element.muted=true
+element.playsInline=true
+
+
+let videoCanPlayHandled=false
+element.oncanplay = () => {
+
+if(videoCanPlayHandled) return
+videoCanPlayHandled=true
+
+frame.appendChild(element)
+let dbgV=document.createElement("div")
+dbgV.className="frameDebugFilename"
+dbgV.textContent=file
+dbgV.style.display=config.debug_overlay?"block":"none"
+frame.appendChild(dbgV)
+document.body.appendChild(frame)
+currentVideos++
+
+element.play()
+
+/* Highlight / Center Highlight */
+
+if(isHighlight){
+
+frame.classList.add("highlight")
+frame.style.boxShadow="0 0 60px "+cfg.highlight_color
+
+if(useCenterHighlight){
+
+let entryMs=Math.max(50,(config.center_highlight_entry_speed||1)*1000)
+let exitMs=Math.max(50,(config.center_highlight_exit_speed||1)*1000)
+let centerDur=config.center_highlight_duration*1000
+let mode=config.center_highlight_mode||"fly"
+if(config.debug_overlay) addDebugLog("center entry="+entryMs+"ms exit="+exitMs+"ms (from config)")
+frame.style.transition="opacity "+entryMs+"ms ease"
+requestAnimationFrame(()=>{ frame.style.opacity="1" })
+
+setTimeout(()=>{
+
+if(mode==="spotlight"){
+
+frame.style.transition="opacity "+exitMs+"ms ease"
+frame.style.opacity="0"
+setTimeout(()=>{
+reservedVideos.delete(file)
+frame.remove()
+currentCenterHighlights=Math.max(0,currentCenterHighlights-1)
+currentVideoHighlights=Math.max(0,currentVideoHighlights-1)
+currentVideos=Math.max(0,currentVideos-1)
+processHighlightQueue()
+},exitMs)
+
+}else{
+
+frame.style.transition="opacity "+exitMs+"ms ease, left "+exitMs+"ms ease, top "+exitMs+"ms ease, transform "+exitMs+"ms ease, box-shadow "+exitMs+"ms ease"
+frame.style.left=startX+"px"
+frame.style.top=window.innerHeight+"px"
+frame.style.transform="translate(0px, 0px) scale(1)"
+frame.style.zIndex="100"
+
+setTimeout(()=>{
+
+frame.classList.remove("highlight")
+frame.style.boxShadow=""
+currentCenterHighlights=Math.max(0,currentCenterHighlights-1)
+currentVideoHighlights=Math.max(0,currentVideoHighlights-1)
+processHighlightQueue()
+
+startFlight()
+startExitWatcher()
+
+},exitMs)
+
+}
+
+},centerDur)
+
+}else{
+
+setTimeout(()=>{
+frame.classList.remove("highlight")
+frame.style.boxShadow=""
+currentVideoHighlights=Math.max(0,currentVideoHighlights-1)
+processHighlightQueue()
+},cfg.highlight_duration*1000)
+
+}
+
+}
+
+if(!useCenterHighlight){
+
+setTimeout(()=>{
+startFlight()
+},50)
+startExitWatcher()
+
+}
+
+}
+
+element.src="/media/"+file
+
+if(config.video_playback_mode==="loop") element.loop=true
+
+/* Bounce Video */
+if(config.video_playback_mode==="bounce"){
+
+let reversing=false
+
+function reverseStep(){
+
+if(!reversing) return
+
+element.currentTime-=0.04
+
+if(element.currentTime<=0){
+
+reversing=false
+element.currentTime=0
+element.play()
+
+return
+}
+
+requestAnimationFrame(reverseStep)
+
+}
+
+element.addEventListener("timeupdate",()=>{
+
+if(!reversing && element.currentTime>=element.duration-0.08){
+
+element.pause()
+reversing=true
+reverseStep()
+
+}
+
+})
+
+}
+
+}else{
+
+element=document.createElement("img")
+element.loading="eager"
+element.src="/media/"+file
+
+}
+
+
+
+if(window.attachPhotoComment) attachPhotoComment(frame, file, config)
+
+
+
+let size=isVideo
+?(config.video_min_size||100)+Math.random()*((config.video_max_size||150)-(config.video_min_size||100))
+:(config.image_min_size||100)+Math.random()*((config.image_max_size||150)-(config.image_min_size||100))
+
+frame.style.width=size+"px"
+
+
+let startX=pickSpawnX(size)
+flashSpawnDebug()
+
+let useCenterHighlight=isHighlight && config.center_highlight_enabled
+
+if(useCenterHighlight){
+
+let screenPercent=config.center_highlight_screen_percent??30
+let targetSize=(screenPercent/100)*Math.min(window.innerWidth,window.innerHeight)
+let centerScale=Math.max(0.1,targetSize/size)
+let centerVar=config.center_highlight_position_variation||0
+let centerOffsetX=(Math.random()*2-1)*centerVar
+let centerOffsetY=(Math.random()*2-1)*centerVar
+
+frame.style.left="50%"
+frame.style.top="50%"
+frame.style.transform="translate("+centerOffsetX+"px,"+centerOffsetY+"px) translate(-50%,-50%) scale("+centerScale+")"
+frame.style.opacity="0"
+frame.style.zIndex="400"
+
+}else{
+
+frame.style.left=startX+"px"
+frame.style.top=window.innerHeight+"px"
+
+}
+
+
+element.onload = () => {
+
+frame.appendChild(element)
+let dbgI=document.createElement("div")
+dbgI.className="frameDebugFilename"
+dbgI.textContent=file
+dbgI.style.display=config.debug_overlay?"block":"none"
+frame.appendChild(dbgI)
+document.body.appendChild(frame)
+currentImages++
+
+/* Highlight / Center Highlight */
+
+if(isHighlight){
+
+frame.classList.add("highlight")
+frame.style.boxShadow="0 0 60px "+cfg.highlight_color
+
+if(useCenterHighlight){
+
+let entryMs=Math.max(50,(config.center_highlight_entry_speed||1)*1000)
+let exitMs=Math.max(50,(config.center_highlight_exit_speed||1)*1000)
+let centerDur=config.center_highlight_duration*1000
+let mode=config.center_highlight_mode||"fly"
+if(config.debug_overlay) addDebugLog("center entry="+entryMs+"ms exit="+exitMs+"ms (from config)")
+frame.style.transition="opacity "+entryMs+"ms ease"
+requestAnimationFrame(()=>{ frame.style.opacity="1" })
+
+setTimeout(()=>{
+
+if(mode==="spotlight"){
+
+frame.style.transition="opacity "+exitMs+"ms ease"
+frame.style.opacity="0"
+setTimeout(()=>{
+reservedImages.delete(file)
+frame.remove()
+currentCenterHighlights=Math.max(0,currentCenterHighlights-1)
+currentImageHighlights=Math.max(0,currentImageHighlights-1)
+currentImages=Math.max(0,currentImages-1)
+processHighlightQueue()
+},exitMs)
+
+}else{
+
+frame.style.transition="opacity "+exitMs+"ms ease, left "+exitMs+"ms ease, top "+exitMs+"ms ease, transform "+exitMs+"ms ease, box-shadow "+exitMs+"ms ease"
+frame.style.left=startX+"px"
+frame.style.top=window.innerHeight+"px"
+frame.style.transform="translate(0px, 0px) scale(1)"
+frame.style.zIndex="100"
+
+setTimeout(()=>{
+
+frame.classList.remove("highlight")
+frame.style.boxShadow=""
+currentCenterHighlights=Math.max(0,currentCenterHighlights-1)
+currentImageHighlights=Math.max(0,currentImageHighlights-1)
+processHighlightQueue()
+
+startFlight()
+
+startExitWatcher()
+
+},exitMs)
+
+}
+
+},centerDur)
+
+}else{
+
+setTimeout(()=>{
+
+frame.classList.remove("highlight")
+frame.style.boxShadow=""
+
+currentImageHighlights=Math.max(0,currentImageHighlights-1)
+
+processHighlightQueue()
+
+},cfg.highlight_duration*1000)
+
+}
+
+}
+
+if(!useCenterHighlight){
+
+setTimeout(()=>{
+startFlight()
+},50)
+startExitWatcher()
+
+}
+
+
+}
+
+}
+
+
+
+async function init(){
+
+await loadConfig()
+updateDebug()
+await loadImages()
+
+connectWebSocket()
+
+setInterval(updateDebug,500)
+
+/* Highlight Queue Watcher */
+setInterval(processHighlightQueue,500)
+
+}
+
+init()
+
+</script>
+
+</body>
+
+</html>
+

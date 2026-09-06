@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Foto Upload</title>
+<script src="/static/comment-fonts.js"></script>
+<script src="/static/simple-md.js"></script>
+<script src="/static/header.js"></script>
+<style>
+body{font-family:system-ui;background:#f5f7fb;margin:0;padding:0;text-align:center;}
+.greeting{margin:0 0 16px 0;overflow-wrap:anywhere;word-wrap:break-word;line-height:1.25;}
+.greeting h1{margin:0.12em 0;font-size:1.6em;}
+.greeting h2{margin:0.12em 0;font-size:1.25em;}
+.greeting h3{margin:0.12em 0;font-size:1.1em;}
+.greeting p{margin:0.12em 0;}
+.greeting u,.greeting ins{text-decoration:underline;}
+.greeting ul,.greeting ol{display:inline-block;text-align:left;margin:0.12em auto;}
+.container{max-width:700px;margin:auto;padding:20px;}
+.header-wrap{display:flex;justify-content:center;align-items:center;margin-bottom:15px;overflow:hidden;}
+.header-wrap.is-rot-90{min-height:200px;}
+.header-img{max-width:100%;max-height:280px;border-radius:10px;transform-origin:center center;}
+.header-wrap.is-rot-90 .header-img{max-width:280px;max-height:100%;}
+.upload-card{background:white;padding:25px;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,0.1);}
+#previewContainer{display:flex;flex-wrap:wrap;gap:16px;justify-content:center;margin-top:20px;}
+.preview{position:relative;width:150px;background:#fafafa;padding:10px;border-radius:10px;box-shadow:0 3px 10px rgba(0,0,0,0.08);}
+.preview img,.preview video{width:100%;border-radius:8px;display:block;}
+.comment-hint{font-size:12px;color:#c00;margin-top:16px;margin-bottom:8px;}
+.removeBtn{position:absolute;top:6px;right:6px;background:#ff4b5c;color:white;border:none;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:14px;line-height:24px;padding:0;}
+textarea{width:100%;height:50px;margin-top:8px;resize:none;border-radius:6px;border:1px solid #ddd;padding:5px;font-size:13px;}
+.upload-btn{margin-top:20px;margin-right:8px;padding:12px 20px;border:none;border-radius:8px;background:#ff4b5c;color:white;font-size:16px;cursor:pointer;}
+.upload-btn:hover{filter:brightness(1.1);}
+.upload-btn:disabled{opacity:0.7;cursor:not-allowed;}
+#uploadProgress{margin-top:15px;font-size:14px;color:#666;}
+</style>
+</head>
+<body>
+<div class="container">
+<div id="headerWrap" class="header-wrap" hidden>
+<img id="headerImg" class="header-img" alt="">
+</div>
+<div id="greeting" class="greeting">Lade deine Fotos hoch</div>
+<div class="upload-card">
+<input id="fileInput" type="file" multiple accept="image/*,video/*">
+<input id="cameraInput" type="file" accept="image/*" capture="environment" style="display:none">
+<input id="videoInput" type="file" accept="video/*" capture="environment" style="display:none">
+<br>
+<button class="upload-btn" type="button" onclick="openCamera()">Foto aufnehmen</button>
+<button class="upload-btn" type="button" id="videoBtn" onclick="openVideoCamera()">Video aufnehmen</button>
+<div id="commentHint" class="comment-hint" style="display:none;"></div>
+<div id="previewContainer"></div>
+<div id="uploadProgress"></div>
+<button id="uploadBtn" class="upload-btn" type="button" onclick="upload()">Upload starten</button>
+</div>
+</div>
+<script>
+let MAX_COMMENT_LENGTH = 80;
+let MAX_FILES = 20;
+let MAX_FILE_SIZE_MB = 50;
+let ALLOW_VIDEOS = true;
+let selectedFiles = [];
+let configLoaded = false;
+
+async function loadUploadConfig(){
+  if(configLoaded) return;
+  try{
+    const cfg = await (await fetch("/api/config")).json();
+    MAX_COMMENT_LENGTH = cfg.comment_max_length || 80;
+    MAX_FILES = cfg.upload_max_files || 20;
+    MAX_FILE_SIZE_MB = cfg.upload_max_file_size_mb || 50;
+    ALLOW_VIDEOS = cfg.upload_allow_videos !== false;
+    const greet = document.getElementById("greeting");
+    const raw = cfg.upload_greeting || "Lade deine Fotos hoch";
+    greet.innerHTML = (window.simpleMd && simpleMd.mdToHtml) ? simpleMd.mdToHtml(raw) : raw.replace(/</g,"&lt;");
+    const align = (window.COMMENT_FONTS && COMMENT_FONTS.align) ? COMMENT_FONTS.align(cfg.upload_greeting_align) : "center";
+    const font = cfg.upload_greeting_font || "Arial";
+    greet.style.textAlign = align;
+    greet.style.fontFamily = (window.COMMENT_FONTS && COMMENT_FONTS.stack) ? COMMENT_FONTS.stack(font) : font;
+    greet.style.color = cfg.upload_greeting_color || "#222222";
+    greet.style.fontSize = (cfg.upload_greeting_size || 28) + "px";
+    greet.style.fontWeight = cfg.upload_greeting_bold !== false ? "bold" : "normal";
+    greet.style.textDecoration = cfg.upload_greeting_underline ? "underline" : "none";
+    if(window.COMMENT_FONTS && COMMENT_FONTS.loadOne) COMMENT_FONTS.loadOne(font, "uploadGreetingFont");
+    const btnColor = cfg.upload_button_color || "#ff4b5c";
+    document.querySelectorAll(".upload-btn").forEach(b => b.style.background = btnColor);
+    const imageRaw = cfg.upload_image || "";
+    const image = (!imageRaw) ? "" : (imageRaw.startsWith("/") || imageRaw.startsWith("http") ? imageRaw : ("/header/" + imageRaw));
+    const wrap = document.getElementById("headerWrap");
+    const img = document.getElementById("headerImg");
+    if(image){
+      img.src = image;
+      wrap.hidden = false;
+      const rot = window.normHeaderRotation ? normHeaderRotation(cfg.upload_image_rotation) : 0;
+      wrap.classList.toggle("is-rot-90", rot === 90 || rot === 270);
+      if(window.applyHeaderRotation) applyHeaderRotation(img, rot);
+      else img.style.transform = rot ? ("rotate(" + rot + "deg)") : "";
+    }
+    document.getElementById("videoBtn").hidden = !ALLOW_VIDEOS;
+    document.getElementById("fileInput").accept = ALLOW_VIDEOS ? "image/*,video/*" : "image/*";
+  }catch(e){}
+  configLoaded = true;
+}
+
+function heartbeat(){ fetch("/api/upload_heartbeat").catch(()=>{}); }
+loadUploadConfig().then(()=>{});
+heartbeat();
+setInterval(heartbeat, 10000);
+
+function openCamera(){ document.getElementById("cameraInput").click(); }
+function openVideoCamera(){ document.getElementById("videoInput").click(); }
+document.getElementById("cameraInput").addEventListener("change", e => handleFiles(e.target.files).catch(()=>{}));
+document.getElementById("videoInput").addEventListener("change", e => handleFiles(e.target.files).catch(()=>{}));
+document.getElementById("fileInput").addEventListener("change", e => handleFiles(e.target.files).catch(()=>{}));
+
+function isValidFile(file){
+  if(file.type.startsWith("image/")) return true;
+  if(ALLOW_VIDEOS && file.type.startsWith("video/")) return true;
+  return false;
+}
+function removeFile(index){ selectedFiles.splice(index,1); renderPreview(); }
+function renderPreview(){
+  const hint = document.getElementById("commentHint");
+  const container = document.getElementById("previewContainer");
+  container.innerHTML = "";
+  if(selectedFiles.length > 0){
+    hint.textContent = "Max. " + MAX_COMMENT_LENGTH + " Zeichen erlaubt";
+    hint.style.display = "block";
+  } else hint.style.display = "none";
+  selectedFiles.forEach((file, index) => {
+    const div = document.createElement("div");
+    div.className = "preview";
+    const remove = document.createElement("button");
+    remove.textContent = "✕";
+    remove.className = "removeBtn";
+    remove.onclick = () => removeFile(index);
+    div.appendChild(remove);
+    if(file.type.startsWith("image")){
+      const img = document.createElement("img");
+      img.src = URL.createObjectURL(file);
+      div.appendChild(img);
+    }
+    if(file.type.startsWith("video")){
+      const vid = document.createElement("video");
+      vid.src = URL.createObjectURL(file);
+      vid.controls = true;
+      div.appendChild(vid);
+    }
+    const textarea = document.createElement("textarea");
+    textarea.placeholder = "Kommentar";
+    textarea.maxLength = MAX_COMMENT_LENGTH;
+    textarea.id = "comment_" + index;
+    div.appendChild(textarea);
+    container.appendChild(div);
+  });
+}
+async function handleFiles(files){
+  await loadUploadConfig();
+  const maxBytes = MAX_FILE_SIZE_MB * 1024 * 1024;
+  const rejected = [];
+  for(const f of files){
+    if(!isValidFile(f)) rejected.push(f.name + ": Kein Bild oder Video");
+    else if(f.size > maxBytes) rejected.push(f.name + ": Zu groß (max " + MAX_FILE_SIZE_MB + " MB)");
+    else if(selectedFiles.length >= MAX_FILES) rejected.push(f.name + ": Max. " + MAX_FILES + " Dateien erlaubt");
+    else selectedFiles.push(f);
+  }
+  if(rejected.length) alert("Folgende Dateien wurden verworfen:\n\n" + rejected.join("\n"));
+  renderPreview();
+}
+function uploadWithProgress(file, comment, onProgress){
+  return new Promise((resolve, reject) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("comment", comment);
+    const xhr = new XMLHttpRequest();
+    xhr.upload.addEventListener("progress", e => {
+      if(e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+    });
+    xhr.addEventListener("load", () => {
+      if(xhr.status >= 200 && xhr.status < 300) resolve();
+      else {
+        let msg = "Upload fehlgeschlagen";
+        try { const j = JSON.parse(xhr.responseText); if(j.detail) msg = j.detail; } catch(e){}
+        reject(new Error(msg));
+      }
+    });
+    xhr.addEventListener("error", () => reject(new Error("Netzwerkfehler")));
+    xhr.open("POST", "/upload");
+    xhr.send(formData);
+  });
+}
+async function upload(){
+  if(selectedFiles.length === 0){ alert("Bitte zuerst Fotos oder Videos auswählen."); return; }
+  const btn = document.getElementById("uploadBtn");
+  const progressEl = document.getElementById("uploadProgress");
+  btn.disabled = true;
+  const total = selectedFiles.length;
+  let completed = 0;
+  function updateProgress(pct){
+    const overall = total > 1 ? Math.round(((completed + pct/100) / total) * 100) : pct;
+    progressEl.textContent = "Wird hochgeladen... (" + overall + "%)";
+    btn.textContent = "Wird hochgeladen... (" + overall + "%)";
+  }
+  try{
+    for(let i = 0; i < selectedFiles.length; i++){
+      const file = selectedFiles[i];
+      const commentField = document.getElementById("comment_" + i);
+      const comment = commentField ? commentField.value : "";
+      await uploadWithProgress(file, comment, pct => updateProgress(pct));
+      completed++;
+      updateProgress(100);
+    }
+    btn.textContent = "Upload starten";
+    progressEl.textContent = "";
+    alert("Upload erfolgreich");
+    location.reload();
+  } catch(err){
+    btn.disabled = false;
+    btn.textContent = "Upload starten";
+    progressEl.textContent = "";
+    alert("Fehler beim Upload: " + (err.message || "Unbekannter Fehler"));
+  }
+}
+</script>
+</body>
+</html>

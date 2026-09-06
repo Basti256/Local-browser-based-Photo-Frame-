@@ -1,0 +1,68 @@
+#wallBackground{
+position:fixed;
+inset:0;
+z-index:0;
+overflow:hidden;
+pointer-events:none;
+background:#000;
+}
+#wallBackground img,
+.bgPreview img{
+position:absolute;
+display:block;
+max-width:none;
+border:0;
+}
+.bgPreview{
+position:relative;
+width:100%;
+aspect-ratio:16/9;
+max-height:280px;
+margin-top:10px;
+border:1px solid #ccc;
+border-radius:8px;
+overflow:hidden;
+background:#000;
+}
+.bgTools{
+margin-top:12px;
+}
+.bgTools label{
+display:flex;
+justify-content:space-between;
+align-items:center;
+gap:8px;
+}
+.bgTools input[type="range"]{
+width:100%;
+margin:4px 0 12px 0;
+padding:0;
+}
+.bgTools select{
+width:100%;
+margin:4px 0 12px 0;
+}
+.bgRotate{
+display:flex;
+gap:8px;
+margin:8px 0 12px 0;
+}
+.bgRotate button{
+width:auto;
+margin:0;
+padding:8px 14px;
+font-size:14px;
+background:#ececec;
+color:#222;
+border:1px solid #ccc;
+border-radius:6px;
+cursor:pointer;
+}
+.bgRotate button:hover{
+background:#dbe8ff;
+}
+.bgHint{
+font-size:13px;
+color:#666;
+margin:0 0 10px 0;
+}

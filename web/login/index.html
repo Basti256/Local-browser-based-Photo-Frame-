@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anmeldung</title>
+<link rel="stylesheet" href="/static/ui.css">
+</head>
+<body>
+<div class="wrap">
+<div class="card">
+<h1>Anmeldung</h1>
+<p class="muted">Konto <strong>Admin</strong> für die Einrichtungsseite.</p>
+<form id="f">
+<input type="text" name="username" value="Admin" autocomplete="username" hidden>
+<label for="password">Passwort</label>
+<input id="password" name="password" type="password" autocomplete="current-password" required>
+<div class="error" id="err" hidden></div>
+<button type="submit">Anmelden</button>
+</form>
+</div>
+</div>
+<script>
+const params = new URLSearchParams(location.search);
+document.getElementById("f").onsubmit = async (e) => {
+  e.preventDefault();
+  const err = document.getElementById("err");
+  err.hidden = true;
+  const res = await fetch("/api/login", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      password: document.getElementById("password").value
+    })
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    err.textContent = data.detail || "Anmeldung fehlgeschlagen.";
+    err.hidden = false;
+    return;
+  }
+  location.href = params.get("next") || "/setup";
+};
+fetch("/api/setup/status").then(r => r.json()).then(s => {
+  if (s.first_run) location.href = "/setup";
+});
+</script>
+</body>
+</html>

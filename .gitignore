@@ -1,0 +1,50 @@
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Backups
+backup-*/
+
+# Local runtime and secrets (created at first setup)
+/data/*
+!/data/.gitkeep
+
+# User projects (created under /setup)
+/projects/*
+!/projects/.gitkeep
+
+# Local smoke-test output (regenerate with testdata/generate_smoke_*.py)
+testdata/smoke-images/
+testdata/smoke-videos/
+
+# Optional local tunnel binaries (do not commit)
+bin/cloudflared
+bin/cloudflared.exe
+bin/*.exe
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment / Secrets
+.env
+.env.local
+*.local

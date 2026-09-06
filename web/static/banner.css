@@ -1,0 +1,80 @@
+/* Banner-Typografie: Grundschrift = 16px bei 120px Höhe, skaliert linear. */
+.bannerContent,
+.bannerEditor-content{
+font-size:calc(var(--banner-h, 120px) * 0.13333);
+line-height:1.2;
+overflow-wrap:anywhere;
+word-wrap:break-word;
+}
+.bannerContent.is-left,
+.bannerEditor-content.is-left{
+align-items:flex-start;
+text-align:left;
+}
+.bannerContent.is-center,
+.bannerEditor-content.is-center{
+align-items:center;
+text-align:center;
+}
+.bannerContent.is-right,
+.bannerEditor-content.is-right{
+align-items:flex-end;
+text-align:right;
+}
+.bannerContent h1,
+.bannerEditor-content h1{
+margin:0.08em 0;
+font-size:1.35em;
+font-weight:bold;
+flex-shrink:0;
+}
+.bannerContent h2,
+.bannerEditor-content h2{
+margin:0.08em 0;
+font-size:1.2em;
+font-weight:bold;
+flex-shrink:0;
+}
+.bannerContent h3,
+.bannerEditor-content h3{
+margin:0.08em 0;
+font-size:1.1em;
+flex-shrink:0;
+}
+.bannerContent p,
+.bannerEditor-content p{
+margin:0.08em 0;
+font-size:1em;
+flex-shrink:0;
+}
+.bannerContent div,
+.bannerEditor-content div{
+flex-shrink:0;
+}
+.bannerContent u,
+.bannerEditor-content u,
+.bannerContent ins,
+.bannerEditor-content ins{
+text-decoration:underline;
+}
+.bannerContent ul,
+.bannerContent ol,
+.bannerEditor-content ul,
+.bannerEditor-content ol{
+margin:0.12em auto;
+font-size:1em;
+}
+.bannerContent.is-left ul,
+.bannerContent.is-left ol,
+.bannerEditor-content.is-left ul,
+.bannerEditor-content.is-left ol{
+margin-left:0;
+margin-right:auto;
+}
+.bannerContent.is-right ul,
+.bannerContent.is-right ol,
+.bannerEditor-content.is-right ul,
+.bannerEditor-content.is-right ol{
+margin-left:auto;
+margin-right:0;
+}

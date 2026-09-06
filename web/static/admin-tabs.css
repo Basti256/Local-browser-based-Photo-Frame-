@@ -1,0 +1,79 @@
+.adminTabs{
+display:flex;
+flex-wrap:wrap;
+gap:6px;
+margin:12px 0 8px 0;
+position:sticky;
+top:0;
+z-index:40;
+background:#fff;
+padding:8px 0 10px;
+border-bottom:1px solid #e5e5e5;
+}
+.adminTabs button{
+width:auto;
+margin:0;
+padding:10px 16px;
+font-size:15px;
+background:#ececec;
+color:#222;
+border:1px solid #ccc;
+}
+.adminTabs button.is-on{
+background:#4CAF50;
+color:#fff;
+border-color:#4CAF50;
+}
+.adminClassicLink{
+font-size:13px;
+color:#666;
+margin:0 0 12px;
+}
+.tabPanel{display:none;}
+.tabPanel.is-on{display:block;}
+.mediaToggle{
+display:flex;
+gap:6px;
+margin:8px 0 4px;
+}
+.mediaToggle button{
+width:auto;
+margin:0;
+padding:8px 14px;
+font-size:14px;
+background:#ececec;
+color:#222;
+border:1px solid #ccc;
+}
+.mediaToggle button.is-on{
+background:#333;
+color:#fff;
+border-color:#333;
+}
+.mediaPane{display:none;}
+.mediaPane.is-on{display:block;}
+.adminSaveBar{
+position:sticky;
+bottom:0;
+z-index:40;
+background:#fff;
+padding:12px 0 0;
+margin-top:20px;
+border-top:1px solid #e5e5e5;
+}
+.adminSaveBar button{
+margin-top:8px;
+margin-bottom:8px;
+}
+.wallMediaBar{
+position:sticky;
+top:58px;
+z-index:39;
+background:#fff;
+padding:6px 0 4px;
+margin-bottom:4px;
+}
+.wallMediaBar .adminClassicLink{margin-bottom:4px;}
+@media (max-width:600px){
+.adminTabs button,.mediaToggle button{flex:1;}
+}

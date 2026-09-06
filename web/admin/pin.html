@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin-PIN</title>
+<link rel="stylesheet" href="/static/ui.css">
+</head>
+<body>
+<div class="wrap">
+<div class="card">
+<h1>Admin-PIN</h1>
+<p class="muted" id="hint">PIN des aktiven Projekts eingeben. Den PIN siehst du in der Einrichtung.</p>
+<form id="f">
+<label for="pin">PIN</label>
+<input id="pin" name="pin" inputmode="numeric" autocomplete="one-time-code" required>
+<div class="error" id="err" hidden></div>
+<p class="muted" id="wait" hidden></p>
+<button type="submit" id="btn">Freischalten</button>
+</form>
+<p class="muted"><a href="/setup">Zur Einrichtung</a> (Master-Konto)</p>
+</div>
+</div>
+<script>
+let waitTimer = null;
+function showErr(msg){
+  const err = document.getElementById("err");
+  err.textContent = msg || "";
+  err.hidden = !msg;
+}
+function setWait(sec){
+  const el = document.getElementById("wait");
+  const btn = document.getElementById("btn");
+  if (waitTimer) clearInterval(waitTimer);
+  if (!sec || sec <= 0){
+    el.hidden = true;
+    btn.disabled = false;
+    return;
+  }
+  let left = sec;
+  el.hidden = false;
+  btn.disabled = true;
+  const tick = () => {
+    el.textContent = "Nächster Versuch in " + Math.ceil(left) + " s";
+    if (left <= 0){
+      clearInterval(waitTimer);
+      el.hidden = true;
+      btn.disabled = false;
+      return;
+    }
+    left -= 0.2;
+  };
+  tick();
+  waitTimer = setInterval(tick, 200);
+}
+function detailWait(data){
+  const d = data && data.detail;
+  if (d && typeof d === "object") return d;
+  return {message: typeof d === "string" ? d : "PIN falsch.", wait_seconds: 0};
+}
+async function refresh(){
+  const s = await (await fetch("/api/admin/pin-status")).json();
+  if (!s.has_project){
+    document.getElementById("hint").textContent = "Kein aktives Projekt. Zuerst in der Einrichtung anlegen.";
+    document.getElementById("f").hidden = true;
+    return;
+  }
+  if (!s.has_pin){
+    document.getElementById("hint").textContent = "Für dieses Projekt ist noch kein PIN gesetzt. PIN unter Einrichtung festlegen.";
+    document.getElementById("f").hidden = true;
+    return;
+  }
+  if (s.unlocked){ location.replace(location.pathname); return; }
+  document.getElementById("hint").textContent = "Projekt: " + s.project;
+  setWait(s.wait_seconds);
+}
+document.getElementById("f").onsubmit = async (e) => {
+  e.preventDefault();
+  showErr("");
+  const res = await fetch("/api/admin/unlock", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({pin: document.getElementById("pin").value})
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.ok){ location.replace(location.pathname); return; }
+  const info = detailWait(data);
+  showErr(info.message || "PIN falsch.");
+  setWait(info.wait_seconds || 0);
+  document.getElementById("pin").value = "";
+};
+refresh();
+</script>
+</body>
+</html>

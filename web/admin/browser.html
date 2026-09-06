@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Medienbrowser</title>
+<link rel="stylesheet" href="/static/ui.css">
+<style>
+.wrap{max-width:1100px;}
+.actions{display:flex;flex-wrap:wrap;align-items:center;gap:0;margin:4px 0 8px;}
+.actions button,.actions .btn{margin-top:8px;}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-top:16px;}
+.tile{position:relative;background:#1c1c1c;border:1px solid #333;border-radius:8px;overflow:hidden;padding:0;text-align:left;width:100%;color:inherit;}
+.tile.selected{border-color:#8ab4ff;box-shadow:0 0 0 2px #8ab4ff;}
+.tile-open{display:block;width:100%;padding:0;margin:0;border:0;background:transparent;color:inherit;cursor:pointer;text-align:left;font:inherit;}
+.tile-open img,.tile-open video{width:100%;height:140px;object-fit:cover;display:block;background:#000;}
+.tile.hidden-tile{opacity:0.45;}
+.tile.hidden-tile.selected{opacity:0.85;}
+.tile .meta{padding:8px;font-size:12px;color:#aaa;}
+.tile .meta .badge{color:#ffcc80;}
+.pick{position:absolute;top:6px;left:6px;z-index:2;margin:0;padding:4px;background:rgba(0,0,0,.55);border-radius:4px;}
+.pick input{width:18px;height:18px;margin:0;padding:0;accent-color:#8ab4ff;}
+.viewer{position:fixed;inset:0;background:rgba(0,0,0,.88);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:20;padding:24px;}
+.viewer:not([hidden]){display:flex;}
+.viewer img,.viewer video{max-width:100%;max-height:80vh;}
+.viewer .bar{margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
+.viewer .bar button{margin-top:0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="card">
+<nav>
+<a href="/admin">Admin</a>
+<a href="/setup">Einrichtung</a>
+<a href="/wall" target="_blank">Wall</a>
+<a href="/upload" target="_blank">Upload</a>
+<a href="/admin/logout">PIN-Sitzung beenden</a>
+</nav>
+<h1>Medienbrowser <span class="muted" id="proj"></span></h1>
+<p class="muted" id="count"></p>
+<p class="muted">Klick öffnet die Großansicht. Häkchen oder Strg+Klick markiert mehrere. Umschalt+Klick wählt einen Bereich.</p>
+<div class="actions">
+<button type="button" class="secondary" id="selAll">Alle auswählen</button>
+<button type="button" class="secondary" id="selNone">Auswahl aufheben</button>
+<button type="button" class="secondary" id="selHide">Verstecken</button>
+<button type="button" class="secondary" id="selShow">Einblenden</button>
+<button type="button" class="danger" id="selDel">Löschen</button>
+<a class="btn secondary" id="dlAll" href="/api/admin/media/archive">Alle herunterladen</a>
+</div>
+<p class="muted" id="selinfo"></p>
+<div class="error" id="err" hidden></div>
+<div class="grid" id="grid"></div>
+</div>
+</div>
+<div id="viewer" class="viewer" hidden>
+<div id="stage"></div>
+<div class="bar">
+<button type="button" class="secondary" id="closev">Schließen</button>
+<button type="button" class="secondary" id="hidev">Verstecken</button>
+<button type="button" class="danger" id="delv">Löschen</button>
+</div>
+</div>
+<script>
+function showErr(msg){
+  const el = document.getElementById("err");
+  el.textContent = msg || "";
+  el.hidden = !msg;
+}
+function fmtSize(n){
+  if (n < 1024) return n + " B";
+  if (n < 1048576) return (n/1024).toFixed(1) + " KB";
+  return (n/1048576).toFixed(1) + " MB";
+}
+let items = [];
+let current = null;
+let selected = new Set();
+let lastIndex = null;
+function selectedItems(){
+  return items.filter(it => selected.has(it.name));
+}
+function syncSelInfo(){
+  const n = selected.size;
+  document.getElementById("selinfo").textContent = n ? (n + " ausgewählt") : "";
+  document.getElementById("selHide").disabled = n === 0;
+  document.getElementById("selShow").disabled = n === 0;
+  document.getElementById("selDel").disabled = n === 0;
+  document.getElementById("selNone").disabled = n === 0;
+}
+function paintSelection(){
+  document.querySelectorAll(".tile[data-name]").forEach(tile => {
+    const name = tile.getAttribute("data-name");
+    const on = selected.has(name);
+    tile.classList.toggle("selected", on);
+    const box = tile.querySelector(".pickbox");
+    if (box) box.checked = on;
+  });
+  syncSelInfo();
+}
+function toggleName(name, on){
+  if (on) selected.add(name);
+  else selected.delete(name);
+}
+async function load(){
+  const res = await fetch("/api/admin/media");
+  if (res.status === 401) { location.href = "/admin/browser"; return; }
+  if (!res.ok) { showErr("Medienliste nicht ladbar"); return; }
+  const data = await res.json();
+  document.getElementById("proj").textContent = data.project ? "· " + data.project : "";
+  items = data.items || [];
+  const valid = new Set(items.map(it => it.name));
+  selected = new Set([...selected].filter(n => valid.has(n)));
+  const hiddenCount = items.filter(it => it.hidden).length;
+  document.getElementById("count").textContent =
+    items.length + " Dateien" + (hiddenCount ? " · " + hiddenCount + " versteckt" : "");
+  const grid = document.getElementById("grid");
+  grid.innerHTML = items.map((it, i) => {
+    const src = "/media/" + encodeURIComponent(it.display);
+    const preview = it.kind === "video"
+      ? `<video src="${src}" muted></video>`
+      : `<img src="${src}" alt="">`;
+    const label = (it.kind === "video" ? "Video" : "Bild")
+      + (it.hidden ? ' · <span class="badge">versteckt</span>' : "")
+      + " · " + fmtSize(it.size);
+    return `<div class="tile${it.hidden ? " hidden-tile" : ""}" data-i="${i}" data-name="${it.name}">
+      <label class="pick"><input type="checkbox" class="pickbox"></label>
+      <button type="button" class="tile-open">${preview}<div class="meta">${label}</div></button>
+    </div>`;
+  }).join("") || "<p class='muted'>Noch keine Medien.</p>";
+  grid.querySelectorAll(".tile").forEach(tile => {
+    const i = Number(tile.getAttribute("data-i"));
+    const it = items[i];
+    tile.querySelector(".pick").onclick = (e) => e.stopPropagation();
+    tile.querySelector(".pickbox").onchange = (e) => {
+      e.stopPropagation();
+      if (e.target.checked && e.shiftKey && lastIndex != null) {
+        selectRange(lastIndex, i, true);
+      } else {
+        toggleName(it.name, e.target.checked);
+        lastIndex = i;
+      }
+      paintSelection();
+    };
+    tile.querySelector(".tile-open").onclick = (e) => {
+      if (e.shiftKey && lastIndex != null) {
+        e.preventDefault();
+        selectRange(lastIndex, i, true);
+        paintSelection();
+        return;
+      }
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        toggleName(it.name, !selected.has(it.name));
+        lastIndex = i;
+        paintSelection();
+        return;
+      }
+      openViewer(it);
+    };
+  });
+  paintSelection();
+}
+function selectRange(from, to, add){
+  const a = Math.min(from, to);
+  const b = Math.max(from, to);
+  for (let i = a; i <= b; i++) {
+    const it = items[i];
+    if (it) toggleName(it.name, add);
+  }
+}
+function openViewer(it){
+  current = it;
+  const src = "/media/" + encodeURIComponent(it.display);
+  const stage = document.getElementById("stage");
+  stage.innerHTML = it.kind === "video"
+    ? `<video src="${src}" controls autoplay></video>`
+    : `<img src="${src}" alt="">`;
+  document.getElementById("hidev").textContent = it.hidden ? "Einblenden" : "Verstecken";
+  document.getElementById("viewer").hidden = false;
+}
+function closeViewer(){
+  document.getElementById("viewer").hidden = true;
+  document.getElementById("stage").innerHTML = "";
+  current = null;
+}
+async function batch(action, names, confirmMsg){
+  if (!names.length) return;
+  if (confirmMsg && !confirm(confirmMsg)) return;
+  const res = await fetch("/api/admin/media/batch", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({action, names})
+  });
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    showErr(typeof d.detail === "string" ? d.detail : "Aktion fehlgeschlagen");
+    return;
+  }
+  if (action === "delete") {
+    names.forEach(n => selected.delete(n));
+    if (current && names.includes(current.name)) closeViewer();
+  }
+  await load();
+}
+document.getElementById("closev").onclick = closeViewer;
+document.getElementById("hidev").onclick = async () => {
+  if (!current) return;
+  await batch(current.hidden ? "show" : "hide", [current.name]);
+  if (current) {
+    const fresh = items.find(it => it.name === current.name);
+    if (fresh) openViewer(fresh);
+  }
+};
+document.getElementById("viewer").addEventListener("click", (e) => {
+  if (e.target.id === "viewer") closeViewer();
+});
+document.getElementById("delv").onclick = async () => {
+  if (!current) return;
+  await batch("delete", [current.name], "Diese Datei löschen?");
+};
+document.getElementById("selAll").onclick = () => {
+  items.forEach(it => selected.add(it.name));
+  lastIndex = items.length ? 0 : null;
+  paintSelection();
+};
+document.getElementById("selNone").onclick = () => {
+  selected.clear();
+  lastIndex = null;
+  paintSelection();
+};
+document.getElementById("selHide").onclick = () => batch("hide", [...selected]);
+document.getElementById("selShow").onclick = () => batch("show", [...selected]);
+document.getElementById("selDel").onclick = () => {
+  const n = selected.size;
+  batch("delete", [...selected], n + " Datei(en) wirklich löschen?");
+};
+load();
+</script>
+</body>
+</html>

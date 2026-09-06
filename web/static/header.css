@@ -1,0 +1,30 @@
+.headerPreview{
+position:relative;
+display:flex;
+justify-content:center;
+align-items:center;
+width:100%;
+min-height:80px;
+max-height:280px;
+margin-top:10px;
+border:1px solid #ccc;
+border-radius:8px;
+overflow:hidden;
+background:#f5f7fb;
+}
+.headerPreview.is-empty{
+display:none;
+}
+.headerPreview img{
+display:block;
+max-width:100%;
+max-height:240px;
+border-radius:8px;
+}
+.headerPreview.is-rot-90{
+min-height:240px;
+}
+.headerPreview.is-rot-90 img{
+max-width:240px;
+max-height:100%;
+}

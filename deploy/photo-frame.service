@@ -1,0 +1,14 @@
+[Unit]
+Description=Local browser based Photo Frame
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/photo-frame
+ExecStart=/opt/photo-frame/venv/bin/python -m server
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
