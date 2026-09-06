@@ -80,7 +80,6 @@ Wall, Upload und Admin eines Projekts sind nur erreichbar, solange das Projekt u
 ├── requirements.txt
 ├── start.sh
 ├── start.bat
-├── MANIFEST.md
 └── TECHNICAL.md
 ```
 

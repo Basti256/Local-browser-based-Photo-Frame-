@@ -84,7 +84,6 @@ Dauerbetrieb unter systemd: `deploy/photo-frame.service`. Details in `TECHNICAL.
 
 ## Dokumentation
 
-- `MANIFEST.md` — Arbeitsregeln und Stand
 - `TECHNICAL.md` — Schnittstellen, Ports, Betrieb
 
 ---

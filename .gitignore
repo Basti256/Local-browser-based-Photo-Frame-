@@ -44,7 +44,5 @@ bin/*.exe
 .DS_Store
 Thumbs.db
 
-# Environment / Secrets
-.env
-.env.local
-*.local
+# Internal agent working notes (not public)
+MANIFEST.md
