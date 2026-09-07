@@ -46,6 +46,7 @@ from server.project_runner import runner
 from server.restart import listen_port, restart_fields, schedule_restart
 from server.runtime import load_runtime, parse_port, update_runtime
 from server.transcode import ffmpeg_bin
+from server.update import apply_update, check_update
 from server.version import __version__
 
 router = APIRouter()
@@ -469,6 +470,34 @@ def api_runtime(
         "port": new_port,
         **restart_fields(request, new_port, changed),
     }
+
+
+@router.post("/api/setup/update/check")
+def api_setup_update_check(_user: str = Depends(require_user)):
+    try:
+        result = check_update()
+    except HTTPException:
+        log("WARNING", "Update-Prüfung fehlgeschlagen")
+        raise
+    log("INFO", result.get("message") or "Update-Prüfung")
+    return result
+
+
+@router.post("/api/setup/update")
+def api_setup_update(request: Request, _user: str = Depends(require_user)):
+    try:
+        result = apply_update()
+    except HTTPException:
+        log("WARNING", "Update fehlgeschlagen")
+        raise
+    log("INFO", result.get("message") or "Update")
+    payload = dict(result)
+    if result.get("restart"):
+        schedule_restart()
+        payload.update(restart_fields(request, listen_port(), True))
+    else:
+        payload.update(restart_fields(request, listen_port(), False))
+    return payload
 
 
 @router.get("/api/setup/logs")

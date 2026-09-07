@@ -54,6 +54,10 @@ HTTPS (Reverse-Proxy, Anzeige-URLs ohne App-Port)
 </label>
 <p class="muted">Gilt für alle Projekte im Modus Public. Der Projektname ist der Pfad, z. B. https://frame.example.org/hochzeit/upload</p>
 <button type="button" id="savePublic">Öffentliche Adresse speichern</button>
+<h2>Update</h2>
+<p class="muted" id="updateinfo">Prüfung und Einspielen nutzen origin/main (fast-forward). data/ und projects/ bleiben unverändert.</p>
+<button type="button" id="checkUpdate">Auf Updates prüfen</button>
+<button type="button" id="doUpdate" class="secondary">Aktualisieren</button>
 
 <h2>Projekte</h2>
 <div class="switch">
@@ -393,6 +397,58 @@ document.getElementById("savePublic").onclick = async () => {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) { showErr("err", detailMsg(data) || "Adresse speichern fehlgeschlagen"); return; }
   loadMain();
+};
+document.getElementById("checkUpdate").onclick = async () => {
+  showErr("err", "");
+  const info = document.getElementById("updateinfo");
+  const checkBtn = document.getElementById("checkUpdate");
+  const doBtn = document.getElementById("doUpdate");
+  checkBtn.disabled = true;
+  doBtn.disabled = true;
+  info.textContent = "Prüfe origin/main …";
+  const res = await fetch("/api/setup/update/check", {method: "POST"});
+  const data = await res.json().catch(() => ({}));
+  checkBtn.disabled = false;
+  doBtn.disabled = false;
+  if (res.status === 401) { location.href = "/login?next=/setup"; return; }
+  if (!res.ok) { showErr("err", detailMsg(data) || "Prüfung fehlgeschlagen"); info.textContent = "Prüfung fehlgeschlagen."; return; }
+  let msg = data.message || "Prüfung abgeschlossen.";
+  if (data.current_version || data.remote_version) {
+    msg += " Lokal " + (data.current_version || "?");
+    if (data.current_rev) msg += " (" + data.current_rev + ")";
+    if (data.remote_version || data.remote_rev) {
+      msg += " · Remote " + (data.remote_version || "?");
+      if (data.remote_rev) msg += " (" + data.remote_rev + ")";
+    }
+  }
+  info.textContent = msg;
+};
+document.getElementById("doUpdate").onclick = async () => {
+  if (!confirm("Update von origin/main einspielen? Der Server startet danach neu. data/ und projects/ bleiben.")) return;
+  showErr("err", "");
+  const info = document.getElementById("updateinfo");
+  const checkBtn = document.getElementById("checkUpdate");
+  const doBtn = document.getElementById("doUpdate");
+  checkBtn.disabled = true;
+  doBtn.disabled = true;
+  info.textContent = "Aktualisiere …";
+  const res = await fetch("/api/setup/update", {method: "POST"});
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401) { location.href = "/login?next=/setup"; return; }
+  if (!res.ok) {
+    checkBtn.disabled = false;
+    doBtn.disabled = false;
+    showErr("err", detailMsg(data) || "Update fehlgeschlagen");
+    info.textContent = "Update fehlgeschlagen.";
+    return;
+  }
+  info.textContent = data.message || "Fertig.";
+  if (data.restart && data.setup_url) {
+    beginPortWait(data.setup_url, data.wait_seconds);
+    return;
+  }
+  checkBtn.disabled = false;
+  doBtn.disabled = false;
 };
 document.getElementById("saveLevel").onclick = async () => {
   const res = await fetch("/api/runtime", {

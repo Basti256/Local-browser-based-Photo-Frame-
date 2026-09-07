@@ -3,7 +3,7 @@
 Handbuch der Software. Funktionen, Schnittstellen, Ports, Betrieb.
 Keine personenbezogenen Daten. Keine Zugangsdaten.
 
-Version des beschriebenen Stands: 2.16.0
+Version des beschriebenen Stands: 2.17.0
 
 ---
 
@@ -41,7 +41,7 @@ Ein Serverprozess. Die Einrichtung hängt am Steuer-Port. Derselbe Port liefert 
 python -m server [--host HOST] [--port PORT]
 ```
 
-Startskripte `start.sh` und `start.bat` rufen denselben Einstieg auf. Updates: `update.sh` / `update.bat` (fast-forward `main`, pip, optional systemd-Neustart).
+Startskripte `start.sh` und `start.bat` rufen denselben Einstieg auf. Updates: unter `/setup` (prüfen / einspielen) oder `update.sh` / `update.bat` (fast-forward `main`, pip, optional systemd-Neustart).
 
 Host ohne `--host`: `data/runtime.json` Feld `bind_host`, Standard `0.0.0.0`.
 Port ohne `--port`: `data/runtime.json` Feld `port`, Standard 8000. Das ist der Einrichtungs-Port (`/setup`).
@@ -148,7 +148,7 @@ Zustandsändernde authentifizierte Anfragen: Origin muss zur Server-Basis-URL pa
 
 ### Geschützt (Master)
 
-`/setup` nach Erststart. APIs: `/api/setup/state`, `/api/setup/logs`, `/api/projects*`, `/api/runtime`, `/api/system`. `POST /api/login` mit Sperre nach Fehlversuchen.
+`/setup` nach Erststart. APIs: `/api/setup/state`, `/api/setup/logs`, `/api/setup/update`, `/api/projects*`, `/api/runtime`, `/api/system`. `POST /api/login` mit Sperre nach Fehlversuchen.
 
 ### Geschützt (PIN)
 
@@ -206,6 +206,8 @@ Unter `/{name}/` gelten dieselben APIs und Dateipfade wie ohne Prefix: `/ws`, `/
 | GET | `/api/setup/logs` | Master, Protokolltext |
 | DELETE | `/api/setup/logs` | Master, leeren |
 | GET | `/api/setup/logs/download` | Master, Datei |
+| POST | `/api/setup/update/check` | Master, Stand von `origin/main` |
+| POST | `/api/setup/update` | Master, fast-forward, pip, Neustart |
 | POST | `/api/runtime` | Master, Port, öffentliche Adresse, Log-Level |
 | POST | `/api/projects` | Master, leeres Projekt anlegen |
 | POST | `/api/projects/import` | Master, ZIP oder `config.json`; neues Projekt |
@@ -341,7 +343,7 @@ Ablauf auf einem Live-System:
 3. `venv/bin/pip install -r requirements.txt` (Windows: `venv\Scripts\pip.exe`)
 4. Prozess neu starten: `sudo systemctl restart photo-frame`, sonst den laufenden Prozess beenden und `./start.sh` bzw. `start.bat`
 
-`update.sh` und `update.bat` führen die Schritte 1–3 aus. `update.sh` startet den systemd-Dienst `photo-frame` neu, wenn er aktiv ist.
+`update.sh` und `update.bat` führen die Schritte 1–3 aus. `update.sh` startet den systemd-Dienst `photo-frame` neu, wenn er aktiv ist. Unter `/setup` (Master) gibt es dieselben Schritte: prüfen (`POST /api/setup/update/check`) und einspielen (`POST /api/setup/update`, danach Neustart).
 
 `--ff-only` bricht ab, wenn auf dem Gerät lokale Commits von `origin/main` abweichen. Dann nicht mergen: lokalen Stand verwerfen oder auf einem Entwicklungsrechner arbeiten.
 

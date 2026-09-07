@@ -1,6 +1,6 @@
 # Local-browser-based-Photo-Frame
 
-**Version 2.16.0**
+**Version 2.17.0**
 
 Browserbasierter Foto-Rahmen: Gäste laden Bilder und Videos über eine Upload-Seite. Eine Wall zeigt die Medien in Echtzeit. Die Einrichtung liegt unter `/setup` (Konto **Admin**). Die Wand-Einstellungen unter `/admin` sind per Projekt-PIN geschützt.
 
@@ -71,7 +71,7 @@ Dauerbetrieb unter systemd: `deploy/photo-frame.service`. Details in `TECHNICAL.
 
 ## Update
 
-Live-Systeme bleiben auf Branch `main`. `data/` und `projects/` gehören nicht ins Git und bleiben beim Update unangetastet.
+Live-Systeme bleiben auf Branch `main`. `data/` und `projects/` gehören nicht ins Git und bleiben beim Update unangetastet. Unter `/setup` gibt es **Auf Updates prüfen** und **Aktualisieren**. Alternativ:
 
 Linux:
 

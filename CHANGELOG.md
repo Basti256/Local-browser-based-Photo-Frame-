@@ -4,6 +4,14 @@ Alle wesentlichen Änderungen am Local-browser-based-Photo-Frame werden in diese
 
 ---
 
+## [2.17.0] – 2026-09-07
+
+### Neu
+
+- Einrichtung: auf Updates prüfen und einspielen (origin/main, fast-forward, pip, Neustart). `data/` und `projects/` bleiben. Die Skripte `update.sh` / `update.bat` bleiben.
+
+---
+
 ## [2.16.0] – 2026-09-07
 
 ### Neu
