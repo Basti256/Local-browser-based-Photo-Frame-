@@ -18,6 +18,7 @@ from server.project import (
 )
 from server.project_runner import runner
 from server.routing import STATUS_MISSING, STATUS_STOPPED, empty_not_found, with_prefix
+from server.version import __version__
 
 router = APIRouter()
 _HEAD_RE = re.compile(r"<head[^>]*>", re.IGNORECASE)
@@ -34,6 +35,9 @@ def _page(*parts: str) -> HTMLResponse:
     text, n = _HEAD_RE.subn(lambda m: m.group(0) + inject, text, count=1)
     if n == 0:
         text = inject + text
+    v = html_lib.escape(__version__, quote=True)
+    text = text.replace("/static/wall-rotate.js", f"/static/wall-rotate.js?v={v}")
+    text = text.replace("/static/wall-rotate.css", f"/static/wall-rotate.css?v={v}")
     return HTMLResponse(
         text,
         headers={"Cache-Control": "no-store, no-cache, must-revalidate"},

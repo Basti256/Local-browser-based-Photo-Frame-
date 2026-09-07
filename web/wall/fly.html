@@ -789,7 +789,6 @@ box.innerHTML =
 "VideoHighlights: "+currentVideoHighlights+" (Queue: "+videoHighlightQueue.length+")<br>"+
 "CenterHighlights: "+currentCenterHighlights+"<br>"+
 "Spawn: "+spawnLabel+"<br>"+
-"Anzeige: "+(window.wallDisplayRotation?wallDisplayRotation():0)+"°<br>"+
 "Cache: "+cacheOn+(config.cache_enabled?" (TTL "+cacheTtl+"min)":"")+"<br>"+
 "Bildschirm wach: "+wakeLockStatus
 
@@ -1796,6 +1795,19 @@ setInterval(processHighlightQueue,500)
 
 init()
 
+</script>
+<script>
+(function(){
+function zap(){
+var el=document.getElementById("wallRotateBar");
+if(el) el.remove();
+try{localStorage.removeItem("pfWallRotate")}catch(e){}
+}
+zap();
+document.addEventListener("DOMContentLoaded", zap);
+setTimeout(zap, 0);
+setTimeout(zap, 100);
+})();
 </script>
 
 </div>

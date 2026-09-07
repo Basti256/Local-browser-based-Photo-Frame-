@@ -11,7 +11,14 @@
     return ANGLES.indexOf(n) >= 0 ? n : 0;
   }
 
+  function stripLegacyControl() {
+    var bar = document.getElementById("wallRotateBar");
+    if (bar && bar.parentNode) bar.parentNode.removeChild(bar);
+    try { global.localStorage.removeItem("pfWallRotate"); } catch (e) {}
+  }
+
   function applyClass() {
+    stripLegacyControl();
     var root = document.documentElement;
     CLASSES.forEach(function (c) { root.classList.remove(c); });
     root.classList.add("wall-rot-" + rotation);
@@ -94,6 +101,11 @@
 
   rotation = 0;
   applyClass();
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", stripLegacyControl);
+  } else {
+    stripLegacyControl();
+  }
 
   global.wallInnerWidth = wallInnerWidth;
   global.wallInnerHeight = wallInnerHeight;

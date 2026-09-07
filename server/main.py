@@ -69,6 +69,12 @@ async def bind_project_port(request: Request, call_next):
         if control_only_blocked(request.scope, request.url.path):
             return setup_redirect_response(request)
         response = await call_next(request)
+        path = (request.url.path or "").split("?")[0]
+        try:
+            if path.startswith("/static/") and (path.endswith(".js") or path.endswith(".css")):
+                response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        except Exception:
+            pass
         try:
             from server.applog import log_request
             log_path = (request.scope.get("state") or {}).get("log_path") or request.url.path

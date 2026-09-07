@@ -4,6 +4,14 @@ Alle wesentlichen Änderungen am Local-browser-based-Photo-Frame werden in diese
 
 ---
 
+## [2.20.2] – 2026-09-07
+
+### Behoben
+
+- Wall: alte Auswahl „Anzeige / Horizontal (0°)“ aus dem Browser-Cache entfernt. Drehung nur noch unter `/admin` Wand → Spezial.
+
+---
+
 ## [2.20.1] – 2026-09-07
 
 ### Geändert
