@@ -567,7 +567,7 @@ cfg.cache_max_videos=toInt(cache_max_videos.value,cfg.cache_max_videos||20)
 cfg.cache_max_size_mb=toInt(cache_max_size_mb.value,cfg.cache_max_size_mb||500)
 
 let saveRes=await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(cfg)})
-if(saveRes.status===401){location.href="/admin";return}
+if(saveRes.status===401){location.href=(typeof pfUrl==="function"?pfUrl("/admin"):"/admin");return}
 let saveData=await saveRes.json()
 if(saveData.view_changed){
 alert("Einstellungen gespeichert. Ansicht geändert – Admin und Wall werden neu geladen.")

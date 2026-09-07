@@ -4,7 +4,7 @@
   function commentUrl(file) {
     var base = String(file || "").split("?")[0];
     var stem = base.replace(/\.[^/.]+$/, "");
-    return "/media/" + encodeURIComponent(stem) + ".txt";
+    return (global.pfUrl ? global.pfUrl("/media/" + encodeURIComponent(stem) + ".txt") : ("/media/" + encodeURIComponent(stem) + ".txt"));
   }
 
   function attachPhotoComment(host, file, config) {

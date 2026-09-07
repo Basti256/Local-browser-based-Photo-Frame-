@@ -1592,7 +1592,7 @@ startExitWatcher()
 
 }
 
-element.src="/media/"+file
+element.src=(typeof pfUrl==="function"?pfUrl("/media/"+file):("/media/"+file))
 
 if(config.video_playback_mode==="loop") element.loop=true
 
@@ -1638,7 +1638,7 @@ reverseStep()
 
 element=document.createElement("img")
 element.loading="eager"
-element.src="/media/"+file
+element.src=(typeof pfUrl==="function"?pfUrl("/media/"+file):("/media/"+file))
 
 }
 

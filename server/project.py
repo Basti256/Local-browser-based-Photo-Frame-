@@ -14,6 +14,7 @@ from server.defaults import DEFAULT_CONFIG, STORAGE_MODES, migrate_config
 from server.paths import PROJECTS_DIR
 from server.restart import listen_port
 from server.runtime import load_runtime, parse_port, update_runtime
+from server.slugs import is_reserved_segment
 
 SETUP_OWNED_KEYS = frozenset({
     "network_mode", "public_host", "public_https", "public_base_url",
@@ -72,7 +73,27 @@ def validate_project_name(name: str) -> str:
             status_code=400,
             detail="Projektname: Buchstaben, Zahlen, Punkt, Unterstrich, Bindestrich. Max. 63 Zeichen.",
         )
+    if is_reserved_segment(name):
+        raise HTTPException(
+            status_code=400,
+            detail="Dieser Name ist für Systempfade reserviert.",
+        )
     return name
+
+
+def find_project_by_slug(segment: str) -> str | None:
+    segment = (segment or "").strip()
+    if not segment or is_reserved_segment(segment):
+        return None
+    names = list_projects()
+    for name in names:
+        if name == segment:
+            return name
+    lowered = segment.lower()
+    hits = [name for name in names if name.lower() == lowered]
+    if len(hits) == 1:
+        return hits[0]
+    return None
 
 
 def list_projects() -> list[str]:
@@ -199,6 +220,10 @@ def get_paths(name: str | None = None) -> ProjectPaths | None:
     paths = ProjectPaths(name)
     if not paths.root.is_dir():
         return None
+    from server.context import get_url_prefix
+    from server.project_runner import runner
+    if get_url_prefix() and not runner.is_running(name):
+        return None
     paths.ensure()
     return paths
 
@@ -207,6 +232,10 @@ def require_paths() -> ProjectPaths:
     paths = get_paths()
     if paths is None:
         raise HTTPException(status_code=409, detail="Kein laufendes Projekt.")
+    from server.context import get_url_prefix
+    from server.project_runner import runner
+    if get_url_prefix() and not runner.is_running(paths.name):
+        raise HTTPException(status_code=409, detail="Projekt ist gestoppt.")
     return paths
 
 

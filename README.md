@@ -1,6 +1,6 @@
 # Local-browser-based-Photo-Frame
 
-**Version 2.13.2**
+**Version 2.15.0**
 
 Browserbasierter Foto-Rahmen: Gäste laden Bilder und Videos über eine Upload-Seite. Eine Wall zeigt die Medien in Echtzeit. Die Einrichtung liegt unter `/setup` (Konto **Admin**). Die Wand-Einstellungen unter `/admin` sind per Projekt-PIN geschützt.
 
@@ -59,19 +59,47 @@ Nach dem Start:
 - Erstkonfiguration: `http://127.0.0.1:8000/setup`
 - Anmeldung (Admin): `http://127.0.0.1:8000/login`
 
-Der Port 8000 ist der Einrichtungs-Port. Jedes Projekt hat einen eigenen Port (beim Anlegen vergeben). Unter `/setup` Starten/Stoppen. Wall, Upload und Admin hängen am Projekt-Port, zum Beispiel `http://127.0.0.1:8001/wall`.
+Der Port 8000 ist der Einrichtungs-Port. Öffentlich (Reverse-Proxy auf diesen Port): `https://frame.example.com/setup` und je laufendem Projekt `https://frame.example.com/<projekt>/wall`. Im LAN bleibt der Projekt-Port gültig, zum Beispiel `http://192.168.x.x:8001/wall`. Unter `/setup` Starten/Stoppen.
 
 Beim Erststart setzt du das Admin-Passwort und den Einrichtungs-Port. Ändert sich der Port, startet der Server neu; die Seite wartet mit Timer und Link auf die neue Adresse. Ein Projekt ist optional und wird danach unter `/setup` angelegt. Passwort und Projekt-PINs werden als Argon2id-Hash gespeichert. `data/` und `projects/` entstehen lokal und gehören nicht ins Git.
 
-Je Projekt: Modus **Network** (LAN-IP und Port, HTTP) oder **Public** (Domain oder IP, optional HTTPS-URLs hinter Reverse-Proxy).
+Je Projekt: Modus **Network** (LAN-IP und Projekt-Port, HTTP) oder **Public** (Domain, Pfad `/{projekt}`, optional HTTPS hinter Reverse-Proxy nur auf den Steuer-Port).
 
 Dauerbetrieb unter systemd: `deploy/photo-frame.service`. Details in `TECHNICAL.md`.
 
 ---
 
+## Update
+
+Live-Systeme bleiben auf Branch `main`. `data/` und `projects/` gehören nicht ins Git und bleiben beim Update unangetastet.
+
+Linux:
+
+```bash
+chmod +x update.sh
+./update.sh
+```
+
+Windows:
+
+```bat
+update.bat
+```
+
+Ohne Skript:
+
+```bash
+git fetch origin
+git checkout main
+git pull --ff-only origin main
+venv/bin/pip install -r requirements.txt
+```
+
+Danach den Server neu starten (`./start.sh` / `start.bat`, oder `sudo systemctl restart photo-frame`). `--ff-only` lehnt abweichende lokale Commits ab; auf dem Gerät nicht am Code arbeiten.
+
 ## Funktionen
 
-- Projekte mit eigener Config, Medien, PIN, eigenem Port; Start/Stop unter `/setup`; Config als ZIP laden/exportieren (`config.json` und Hintergründe)
+- Projekte mit eigener Config, Medien, PIN, eigenem LAN-Port; öffentlich unter `/{name}/` am Steuer-Port; Start/Stop unter `/setup`; Config als ZIP laden/exportieren (`config.json` und Hintergründe)
 - Medienspeicher im Projektordner oder in einem Ordner/Netzlaufwerk
 - QR-Code zur Upload-Seite gemäß Projekt-Netzwerkmodus
 - PIN-geschützter Medienbrowser: Mehrfachauswahl, Verstecken, Löschen, ZIP-Download

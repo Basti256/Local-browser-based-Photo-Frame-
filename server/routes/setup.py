@@ -146,7 +146,7 @@ def setup_state(_user: str = Depends(require_user)):
             "storage_path": cfg.get("storage_path") or "",
             "has_pin": has_pin(p),
             "pin": ensure_project_pin(p),
-            "base_url": advertised_base_url(cfg),
+            "base_url": advertised_base_url(cfg, name=name),
         })
     return {
         "version": __version__,
@@ -212,7 +212,7 @@ def api_project_network(name: str, body: ProjectNetworkBody, _user: str = Depend
         "network_mode": cfg["network_mode"],
         "public_host": cfg["public_host"],
         "public_https": cfg["public_https"],
-        "base_url": advertised_base_url(cfg),
+        "base_url": advertised_base_url(cfg, name=name),
     }
 
 

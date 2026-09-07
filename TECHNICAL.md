@@ -3,7 +3,7 @@
 Handbuch der Software. Funktionen, Schnittstellen, Ports, Betrieb.
 Keine personenbezogenen Daten. Keine Zugangsdaten.
 
-Version des beschriebenen Stands: 2.13.2
+Version des beschriebenen Stands: 2.15.0
 
 ---
 
@@ -35,13 +35,13 @@ Python-Pakete: siehe `requirements.txt`.
 
 ## 3. Prozessmodell
 
-Ein Serverprozess. Die Einrichtung hängt am Steuer-Port. Jedes gestartete Projekt bekommt zusätzlich einen eigenen TCP-Port (weiterer Uvicorn-Listener, gleicher Prozess, ohne zweiten Lifespan).
+Ein Serverprozess. Die Einrichtung hängt am Steuer-Port. Derselbe Port liefert laufende Projekte unter `/{name}/…`. Zusätzlich bekommt jedes gestartete Projekt einen eigenen TCP-Port für den LAN-Zugriff (weiterer Uvicorn-Listener, gleicher Prozess, ohne zweiten Lifespan).
 
 ```text
 python -m server [--host HOST] [--port PORT]
 ```
 
-Startskripte `start.sh` und `start.bat` rufen denselben Einstieg auf.
+Startskripte `start.sh` und `start.bat` rufen denselben Einstieg auf. Updates: `update.sh` / `update.bat` (fast-forward `main`, pip, optional systemd-Neustart).
 
 Host ohne `--host`: `data/runtime.json` Feld `bind_host`, Standard `0.0.0.0`.
 Port ohne `--port`: `data/runtime.json` Feld `port`, Standard 8000. Das ist der Einrichtungs-Port (`/setup`).
@@ -50,9 +50,9 @@ Port ohne `--port`: `data/runtime.json` Feld `port`, Standard 8000. Das ist der 
 
 Nach dem Neustart startet der Prozess die in `running_projects` eingetragenen Projekte wieder.
 
-Bind-Adresse gilt nach diesem Neustart. Die Anzeige-URL (QR-Code) nutzt den Projekt-Port aus `config.json`, nicht den Einrichtungs-Port.
+Bind-Adresse gilt nach diesem Neustart. Die Anzeige-URL (QR-Code) im Modus `network` nutzt den Projekt-Port. Im Modus `public` die Domain plus `/{name}` am Steuer-Port, ohne Projekt-Port.
 
-Wall, Upload und Admin eines Projekts sind nur erreichbar, solange das Projekt unter `/setup` gestartet ist. Mehrere Projekte können gleichzeitig laufen, jedes auf seinem Port. Einrichtung, Login und projektverwaltende APIs nur auf dem Steuer-Port.
+Wall, Upload und Admin eines Projekts sind nur erreichbar, solange das Projekt unter `/setup` gestartet ist. Mehrere Projekte gleichzeitig: am Steuer-Port über verschiedene Pfade, im LAN je auf dem Projekt-Port. Einrichtung, Login und projektverwaltende APIs nur auf dem Steuer-Port, nicht unter `/{name}/`.
 
 ---
 
@@ -80,12 +80,14 @@ Wall, Upload und Admin eines Projekts sind nur erreichbar, solange das Projekt u
 ├── requirements.txt
 ├── start.sh
 ├── start.bat
+├── update.sh
+├── update.bat
 └── TECHNICAL.md
 ```
 
 `network_mode` `local`, `internal` → `network`. `tunnel` → `public`.
 
-Wall/Upload/Admin eines laufenden Projekts hängen am Projekt-Port. `/setup` am Steuer-Port.
+Am Steuer-Port: `/{name}/wall`, `/{name}/upload`, `/{name}/admin`. Am Projekt-Port: `/wall` ohne Prefix. `/setup` nur am Steuer-Port.
 
 ---
 
@@ -126,7 +128,7 @@ Gilt für `/setup` und projektverwaltende APIs. Es gibt genau ein Konto `Admin`.
 
 - Login: `GET /login`, `POST /api/login` (nur Passwort)
 - Logout: `GET /logout`, `POST /api/logout`
-- Cookie `pf_session`, HttpOnly, SameSite=Lax, Secure bei HTTPS, 7 Tage
+- Cookie `pf_session`, HttpOnly, SameSite=Lax, Secure bei HTTPS, Path `/`, 7 Tage
 - Fehlversuche Login: 5 je Client-Adresse in 15 Minuten, dann HTTP 429
 - Passwort: mindestens 10 Zeichen, ungleich `Admin`, Speicherung Argon2id
 
@@ -135,7 +137,7 @@ Gilt für `/setup` und projektverwaltende APIs. Es gibt genau ein Konto `Admin`.
 Gilt für `/admin` und schreibende Admin-APIs des aktiven Projekts. Beim Anlegen eines Projekts wird ein zufälliger 4-stelliger PIN erzeugt. Die Ziffern sieht nur die Einrichtungsseite (`/setup`, Master-Session). Prüfung weiterhin Argon2id. In `access.json` liegt der Hash und ein versiegelter Anzeigewert, keine Klartext-Ziffernfolge. Ein anderer PIN (4–10 Ziffern) kann unter `/setup` gesetzt werden.
 
 - Freischalten: `POST /api/admin/unlock`
-- Cookie `pf_admin`, HttpOnly, SameSite=Lax, gebunden an den Projektnamen, 12 Stunden
+- Cookie `pf_admin`, HttpOnly, SameSite=Lax, gebunden an den Projektnamen, Path `/{name}` am Steuer-Port bzw. `/` am Projekt-Port, 12 Stunden
 - Logout: `GET /admin/logout`
 - Unbegrenzt Versuche. Nach Fehlversuch n: Wartezeit `min(3600, 2^n)` Sekunden (erster Fehler: 2 s). Die Wartezeit gilt projektweit. Korrekter PIN setzt den Zähler zurück.
 - Fehlt ein PIN (ältere Projekte): die Einrichtung erzeugt beim nächsten Laden einen neuen 4-stelligen PIN.
@@ -158,27 +160,35 @@ Zustandsändernde authentifizierte Anfragen: Origin muss zur Server-Basis-URL pa
 
 ## 8. HTTP- und WebSocket-Schnittstellen
 
-Basis: `http://<host>:<port>`
+Basis: Steuer-Port `http://<host>:<steuer-port>`. Reverse-Proxy/Tunnel spricht nur diesen Port. Öffentliche Pfade nutzen denselben Host.
+
+Projektseiten, APIs, WebSocket, Medien und `sw.js` hängen am Steuer-Port unter `/{name}/…` (HTML setzt `meta name="pf-base"`). Am LAN-Projekt-Port dieselben Pfade ohne Prefix.
 
 ### Seiten
 
 | Methode | Pfad | Funktion |
 |---------|------|----------|
-| GET | `/` | Umleitung auf `/wall` |
-| GET | `/wall` | Am Projekt-Port: Fly oder Grid. Am Steuer-Port: Umleitung auf das einzige laufende Projekt oder Hinweisseite. |
-| GET | `/wall/grid` | Grid |
-| GET | `/upload` | Gäste-Upload |
-| GET | `/admin` | Wand-Einstellungen (Reiter), nach PIN |
-| GET | `/admin/classic` | Vorherige Admin-HTML (Fly oder Grid je nach Modus), nach PIN |
-| GET | `/admin/browser` | Medienbrowser, nach PIN |
-| GET | `/admin/logout` | PIN-Sitzung löschen |
-| GET | `/p/{name}/wall` | Wenn das Projekt läuft: Umleitung auf `http://<host>:<projekt-port>/wall`. Sonst Hinweisseite. |
-| GET | `/p/{name}/upload` | Entsprechend Upload |
-| GET | `/p/{name}/admin` | Entsprechend Admin |
-| GET | `/p/{name}/browser` | Entsprechend Medienbrowser |
+| GET | `/` | Am Steuer-Port: Umleitung auf `/setup`. Am Projekt-Port oder unter `/{name}`: Wall |
+| GET | `/{name}/wall` | Fly oder Grid, wenn das Projekt läuft. Gestoppt: Hinweisseite. Unbekannt: keine-Projekt-Seite |
+| GET | `/{name}/upload` | Gäste-Upload |
+| GET | `/{name}/admin` | Wand-Einstellungen (Reiter), nach PIN |
+| GET | `/{name}/admin/classic` | Vorherige Admin-HTML, nach PIN |
+| GET | `/{name}/admin/browser` | Medienbrowser, nach PIN |
+| GET | `/{name}/admin/logout` | PIN-Sitzung löschen |
+| GET | `/wall` | Am Projekt-Port: Wall. Am Steuer-Port ohne Prefix: Umleitung auf das einzige laufende `/{name}/wall` oder Hinweisseite |
+| GET | `/upload` | Am Projekt-Port: Upload |
+| GET | `/admin` | Am Projekt-Port: Admin |
+| GET | `/p/{name}/wall` | 302 auf `/{name}/wall` (gleicher Host, ohne Projekt-Port) |
+| GET | `/p/{name}/upload` | 302 auf `/{name}/upload` |
+| GET | `/p/{name}/admin` | 302 auf `/{name}/admin` |
+| GET | `/p/{name}/browser` | 302 auf `/{name}/admin/browser` |
 | GET | `/setup` | Erststart und Projektverwaltung |
 | GET | `/login` | Anmeldung als Admin |
 | GET | `/logout` | Master-Session löschen |
+
+`{name}` ist der Projektordner. URL-Groß/Kleinschreibung darf abweichen, wenn der Name intern eindeutig ist. Reservierte erste Pfadsegmente, die kein Projekt sein dürfen: `setup`, `login`, `logout`, `admin`, `wall`, `upload`, `api`, `media`, `derived`, `header`, `background`, `p`, `ws`, `static`, `assets` (plus `sw.js`, `favicon.ico`, `robots.txt`).
+
+Unter `/{name}/` gelten dieselben APIs und Dateipfade wie ohne Prefix: `/ws`, `/api/*`, `/media/*`, `/derived/*`, `/header/*`, `/background/*`, `/sw.js`.
 
 ### API (Auswahl)
 
@@ -223,9 +233,9 @@ Feld `network_mode` in `projects/<name>/config.json`. Zulässig: `network`, `pub
 | Wert | Anzeige-URL (QR, Links) |
 |------|-------------------------|
 | `network` | `http://<lokale-IPv4>:<projekt-port>` |
-| `public` | Host aus `public_host` (Domain oder IP). `public_https` wahr: `https://<host>` ohne Listen-Port (Reverse-Proxy auf 443). Sonst `http://<host>:<projekt-port>` außer Port 80. |
+| `public` | `https://<public_host>/{name}` bzw. `http://<public_host>/{name}`. Nie der Projekt-Port. Reverse-Proxy nur auf den Steuer-Port. |
 
-Die Anwendung nimmt selbst nur HTTP entgegen. Der Schalter HTTPS ändert ausschließlich die ausgegebenen URLs.
+Die Anwendung nimmt selbst nur HTTP entgegen. Der Schalter HTTPS ändert ausschließlich die ausgegebenen URLs. QR-Code Upload im Public-Modus: `https://<host>/{name}/upload`.
 
 Lokale IPv4: UDP zu `8.8.8.8`. Externe IP nur als Fallback, wenn Public ohne Host.
 
@@ -314,6 +324,25 @@ Internet: Master-Konto und Admin-PIN gelten unabhängig von TLS. Reverse-Proxy m
 
 ---
 
-## 15. Lizenz
+## 15. Updates
+
+Auslieferung nur über Branch `main`. Kein Force-Push. `data/` und `projects/` sind lokal und bleiben beim Update erhalten.
+
+Ablauf auf einem Live-System:
+
+1. `git fetch origin` und `git checkout main` (einmalig, falls das Clone noch auf einem anderen Branch steht)
+2. `git pull --ff-only origin main`
+3. `venv/bin/pip install -r requirements.txt` (Windows: `venv\Scripts\pip.exe`)
+4. Prozess neu starten: `sudo systemctl restart photo-frame`, sonst den laufenden Prozess beenden und `./start.sh` bzw. `start.bat`
+
+`update.sh` und `update.bat` führen die Schritte 1–3 aus. `update.sh` startet den systemd-Dienst `photo-frame` neu, wenn er aktiv ist.
+
+`--ff-only` bricht ab, wenn auf dem Gerät lokale Commits von `origin/main` abweichen. Dann nicht mergen: lokalen Stand verwerfen oder auf einem Entwicklungsrechner arbeiten.
+
+Neue ausgelieferte Version: `server/version.py`, README, dieses Handbuch, CHANGELOG. `MANIFEST.md` bleibt lokal und gehört nicht ins Repository.
+
+---
+
+## 16. Lizenz
 
 MIT

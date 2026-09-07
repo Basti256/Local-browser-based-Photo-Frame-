@@ -93,7 +93,7 @@
       return;
     }
     img.style.display = "block";
-    var src = "/background/" + encodeURIComponent(cfg.background_image);
+    var src = (global.pfUrl ? global.pfUrl("/background/" + encodeURIComponent(cfg.background_image)) : ("/background/" + encodeURIComponent(cfg.background_image)));
     function run() {
       layout(root, cfg, img);
     }

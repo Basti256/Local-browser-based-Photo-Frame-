@@ -103,7 +103,7 @@ function toggleName(name, on){
 }
 async function load(){
   const res = await fetch("/api/admin/media");
-  if (res.status === 401) { location.href = "/admin/browser"; return; }
+  if (res.status === 401) { location.href = (typeof pfUrl === "function" ? pfUrl("/admin/browser") : "/admin/browser"); return; }
   if (!res.ok) { showErr("Medienliste nicht ladbar"); return; }
   const data = await res.json();
   document.getElementById("proj").textContent = data.project ? "· " + data.project : "";
@@ -115,7 +115,7 @@ async function load(){
     items.length + " Dateien" + (hiddenCount ? " · " + hiddenCount + " versteckt" : "");
   const grid = document.getElementById("grid");
   grid.innerHTML = items.map((it, i) => {
-    const src = "/media/" + encodeURIComponent(it.display);
+    const src = (typeof pfUrl === "function" ? pfUrl("/media/" + encodeURIComponent(it.display)) : ("/media/" + encodeURIComponent(it.display)));
     const preview = it.kind === "video"
       ? `<video src="${src}" muted></video>`
       : `<img src="${src}" alt="">`;
@@ -170,7 +170,7 @@ function selectRange(from, to, add){
 }
 function openViewer(it){
   current = it;
-  const src = "/media/" + encodeURIComponent(it.display);
+  const src = (typeof pfUrl === "function" ? pfUrl("/media/" + encodeURIComponent(it.display)) : ("/media/" + encodeURIComponent(it.display)));
   const stage = document.getElementById("stage");
   stage.innerHTML = it.kind === "video"
     ? `<video src="${src}" controls autoplay></video>`

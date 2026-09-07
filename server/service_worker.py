@@ -203,8 +203,13 @@ def service_worker_response() -> Response:
         "cache_max_videos": max_vid,
         "cache_max_bytes": max_bytes,
     }
+    headers = {"Cache-Control": "no-cache, no-store, must-revalidate"}
+    from server.context import get_url_prefix
+    prefix = get_url_prefix()
+    if prefix:
+        headers["Service-Worker-Allowed"] = prefix + "/"
     return Response(
         content=body,
         media_type="application/javascript",
-        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+        headers=headers,
     )

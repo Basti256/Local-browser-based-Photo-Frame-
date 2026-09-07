@@ -8,7 +8,7 @@ from collections import defaultdict
 from fastapi import APIRouter, Depends, WebSocket
 
 from server import stats
-from server.context import get_current_project, reset_current_project, set_current_project
+from server.context import get_current_project, reset_current_project, set_current_project, set_url_prefix
 from server.deps import require_admin_pin
 from server.network import get_upload_url
 from server.project import (
@@ -59,11 +59,20 @@ async def broadcast_config(reload_full: bool = False, project: str | None = None
 async def websocket_endpoint(websocket: WebSocket):
     server = websocket.scope.get("server")
     port = server[1] if server and len(server) >= 2 else None
-    name = runner.project_for_port(port)
+    state = websocket.scope.get("state") or {}
+    name = state.get("project_name") if isinstance(state, dict) else getattr(state, "project_name", None)
     if not name:
+        name = runner.project_for_port(port)
+    status = state.get("project_status") if isinstance(state, dict) else getattr(state, "project_status", None)
+    prefix = (state.get("url_prefix") if isinstance(state, dict) else getattr(state, "url_prefix", None)) or ""
+    if not name or status in ("stopped", "missing"):
+        await websocket.close(code=1008)
+        return
+    if prefix and not runner.is_running(name):
         await websocket.close(code=1008)
         return
     token = set_current_project(name)
+    prefix_token = set_url_prefix(prefix)
     await websocket.accept()
     clients[name].append(websocket)
     try:
@@ -82,6 +91,8 @@ async def websocket_endpoint(websocket: WebSocket):
         if websocket in clients[name]:
             clients[name].remove(websocket)
     finally:
+        from server.context import reset_url_prefix
+        reset_url_prefix(prefix_token)
         reset_current_project(token)
 
 

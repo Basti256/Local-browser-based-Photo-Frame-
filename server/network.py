@@ -59,29 +59,29 @@ def lan_origin(request, port: int) -> str:
     return f"{scheme}://{hostname}:{port}"
 
 
-def advertised_base_url(config: dict | None = None) -> str:
+def advertised_base_url(config: dict | None = None, name: str | None = None) -> str:
     rt = load_runtime()
+    paths = get_paths()
     if config is None:
-        paths = get_paths()
         config = load_project_config(paths) if paths else {}
+    if name is None and paths:
+        name = paths.name
     if config:
         port = project_listen_port(config=config)
     else:
         port = int(rt.get("port", 8000))
     mode = normalize_mode(config.get("network_mode"))
+    slug = (name or "").strip()
     if mode == "public":
         host = sanitize_public_host(config.get("public_host") or "")
         https = bool(config.get("public_https"))
         scheme = "https" if https else "http"
         if not host:
             host = get_external_ip() or get_local_ip()
-        if https:
-            return f"{scheme}://{host}"
-        if ":" in host.strip("[]"):
-            return f"{scheme}://{host}"
-        if port == 80:
-            return f"{scheme}://{host}"
-        return f"{scheme}://{host}:{port}"
+        origin = f"{scheme}://{host}".rstrip("/")
+        if slug:
+            return f"{origin}/{slug}"
+        return origin
     return f"http://{get_local_ip()}:{port}"
 
 

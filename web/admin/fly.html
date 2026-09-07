@@ -1477,7 +1477,7 @@ headers:{
 },
 body:JSON.stringify(config)
 })
-if(saveRes.status===401){ location.href="/admin"; return }
+if(saveRes.status===401){ location.href=(typeof pfUrl==="function"?pfUrl("/admin"):"/admin"); return }
 let saveData=await saveRes.json()
 if(saveData.view_changed){
 alert("Einstellungen gespeichert. Ansicht geändert – Admin und Wall werden neu geladen.")

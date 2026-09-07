@@ -4,6 +4,29 @@ Alle wesentlichen Änderungen am Local-browser-based-Photo-Frame werden in diese
 
 ---
 
+## [2.15.0] – 2026-09-07
+
+### Neu
+
+- Öffentliche Domain: laufende Projekte unter `/{name}/wall`, `/{name}/upload`, `/{name}/admin` am Steuer-Port, ohne Umleitung auf den Projekt-Port.
+- GET `/` am Steuer-Port führt nach `/setup`. Legacy `/p/{name}/…` leitet auf `/{name}/…` um (gleicher Host).
+- Public-QR und Public-Links nutzen nur Domain plus Pfad. LAN-Projekt-Port bleibt für Modus Network.
+- Projektnamen, die mit Systempfaden kollidieren (`setup`, `admin`, `wall`, …), werden beim Anlegen abgelehnt.
+
+### Geändert
+
+- Admin-Cookie `pf_admin` gilt unter `/{name}` am Steuer-Port, damit die PIN je Projekt bleibt.
+
+---
+
+## [2.14.0] – 2026-09-07
+
+### Neu
+
+- Live-Update: `update.sh` / `update.bat` holen `main` per fast-forward, installieren Abhängigkeiten und starten unter Linux den Dienst `photo-frame`, falls er läuft. `data/` und `projects/` bleiben lokal.
+
+---
+
 ## [2.13.2] – 2026-09-06
 
 ### Geändert

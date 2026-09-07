@@ -1,49 +1,70 @@
 """Auslieferung der HTML-Seiten aus web/."""
+from __future__ import annotations
+
+import html as html_lib
+import re
+
 from fastapi import APIRouter, Request
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 from server.auth import has_user
+from server.context import get_url_prefix
 from server.deps import html_guard
-from server.network import lan_origin
 from server.paths import WEB_DIR
 from server.pin import admin_project, clear_admin_session, has_pin
 from server.project import (
-    ProjectPaths,
     get_paths,
     load_project_config,
-    project_listen_port,
-    validate_project_name,
 )
 from server.project_runner import runner
+from server.routing import STATUS_MISSING, STATUS_STOPPED, with_prefix
 
 router = APIRouter()
+_HEAD_RE = re.compile(r"<head[^>]*>", re.IGNORECASE)
 
 
-def _page(*parts: str) -> FileResponse:
+def _page(*parts: str) -> HTMLResponse:
     path = WEB_DIR.joinpath(*parts)
-    return FileResponse(
-        path,
-        media_type="text/html; charset=utf-8",
+    text = path.read_text(encoding="utf-8")
+    prefix = get_url_prefix() or ""
+    inject = (
+        f'<meta name="pf-base" content="{html_lib.escape(prefix, quote=True)}">'
+        f'<script src="/static/js/pf-base.js"></script>'
+    )
+    text, n = _HEAD_RE.subn(lambda m: m.group(0) + inject, text, count=1)
+    if n == 0:
+        text = inject + text
+    return HTMLResponse(
+        text,
         headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
     )
 
 
-def _no_project() -> FileResponse:
+def _no_project() -> HTMLResponse:
     return _page("setup", "no-project.html")
 
 
-def _stopped() -> FileResponse:
+def _stopped() -> HTMLResponse:
     return _page("setup", "stopped.html")
 
 
-def _project_origin(request: Request, name: str) -> str:
-    paths = ProjectPaths(name)
-    return lan_origin(request, project_listen_port(paths))
+def _slug_status(request: Request) -> str | None:
+    state = request.scope.get("state") or {}
+    return state.get("project_status")
+
+
+def _on_project_listener(request: Request) -> bool:
+    server = request.scope.get("server")
+    if not server or len(server) < 2:
+        return False
+    return runner.project_for_port(server[1]) is not None
 
 
 @router.get("/")
 def root(request: Request):
-    return wall_page(request)
+    if get_url_prefix() or _on_project_listener(request):
+        return wall_page(request)
+    return RedirectResponse("/setup", status_code=302)
 
 
 @router.get("/login")
@@ -63,7 +84,7 @@ def logout_page(request: Request):
 
 @router.get("/admin/logout")
 def admin_logout():
-    response = RedirectResponse("/admin", status_code=302)
+    response = RedirectResponse(with_prefix("/admin"), status_code=302)
     clear_admin_session(response)
     return response
 
@@ -78,6 +99,9 @@ def setup_page(request: Request):
 
 @router.get("/admin/classic")
 def admin_classic_page(request: Request):
+    gated = _project_html_gate(request)
+    if gated is not None:
+        return gated
     paths = get_paths()
     if paths is None:
         return _redirect_single_or_none(request, "/admin/classic")
@@ -91,6 +115,9 @@ def admin_classic_page(request: Request):
 
 @router.get("/admin")
 def admin_page(request: Request):
+    gated = _project_html_gate(request)
+    if gated is not None:
+        return gated
     paths = get_paths()
     if paths is None:
         return _redirect_single_or_none(request, "/admin")
@@ -101,6 +128,9 @@ def admin_page(request: Request):
 
 @router.get("/admin/browser")
 def admin_browser_page(request: Request):
+    gated = _project_html_gate(request)
+    if gated is not None:
+        return gated
     paths = get_paths()
     if paths is None:
         return _redirect_single_or_none(request, "/admin/browser")
@@ -109,48 +139,80 @@ def admin_browser_page(request: Request):
     return _page("admin", "browser.html")
 
 
+def _project_html_gate(request: Request):
+    status = _slug_status(request)
+    if status == STATUS_MISSING:
+        return _no_project()
+    if status == STATUS_STOPPED:
+        return _stopped()
+    return None
+
+
 def _redirect_single_or_none(request: Request, dest: str):
     running = runner.running_names()
     if len(running) == 1:
-        return RedirectResponse(_project_origin(request, running[0]) + dest, status_code=302)
+        return RedirectResponse(f"/{running[0]}{dest}", status_code=302)
     return _no_project()
 
 
-def _open_project(request: Request, name: str, dest: str):
-    name = validate_project_name(name)
-    paths = ProjectPaths(name)
-    if not paths.config_file.is_file():
+def _legacy_project_redirect(name: str, dest: str):
+    from server.project import find_project_by_slug
+    found = find_project_by_slug(name)
+    if not found:
         return _no_project()
+    name = found
     if not runner.is_running(name):
         return _stopped()
-    return RedirectResponse(_project_origin(request, name) + dest, status_code=302)
+    if dest == "/":
+        dest = "/wall"
+    return RedirectResponse(f"/{name}{dest}", status_code=302)
 
 
 @router.get("/p/{name}/wall")
-def project_wall(name: str, request: Request):
-    return _open_project(request, name, "/wall")
+def project_wall(name: str):
+    return _legacy_project_redirect(name, "/wall")
 
 
 @router.get("/p/{name}/upload")
-def project_upload(name: str, request: Request):
-    return _open_project(request, name, "/upload")
+def project_upload(name: str):
+    return _legacy_project_redirect(name, "/upload")
 
 
 @router.get("/p/{name}/admin")
-def project_admin(name: str, request: Request):
-    return _open_project(request, name, "/admin")
+def project_admin(name: str):
+    return _legacy_project_redirect(name, "/admin")
 
 
 @router.get("/p/{name}/browser")
-def project_browser(name: str, request: Request):
-    return _open_project(request, name, "/admin/browser")
+def project_browser(name: str):
+    return _legacy_project_redirect(name, "/admin/browser")
+
+
+@router.get("/p/{name}")
+def project_legacy_root(name: str):
+    return _legacy_project_redirect(name, "/wall")
+
+
+@router.get("/p/{name}/{rest:path}")
+def project_legacy_rest(name: str, rest: str):
+    dest = "/" + rest.lstrip("/") if rest else "/wall"
+    if dest == "/browser" or dest.startswith("/browser/"):
+        dest = "/admin" + dest[len("/browser"):] if dest != "/browser" else "/admin/browser"
+        if dest == "/admin":
+            dest = "/admin/browser"
+    return _legacy_project_redirect(name, dest)
 
 
 @router.get("/wall")
 def wall_page(request: Request):
+    gated = _project_html_gate(request)
+    if gated is not None:
+        return gated
     paths = get_paths()
     if paths is None:
         return _redirect_single_or_none(request, "/wall")
+    if get_url_prefix() and not runner.is_running(paths.name):
+        return _stopped()
     config = load_project_config(paths)
     if config.get("wall_view_mode") == "grid":
         return _page("wall", "grid.html")
@@ -159,6 +221,9 @@ def wall_page(request: Request):
 
 @router.get("/wall/grid")
 def wall_grid_page(request: Request):
+    gated = _project_html_gate(request)
+    if gated is not None:
+        return gated
     if get_paths() is None:
         return _redirect_single_or_none(request, "/wall/grid")
     return _page("wall", "grid.html")
@@ -166,6 +231,11 @@ def wall_grid_page(request: Request):
 
 @router.get("/upload")
 def upload_page(request: Request):
+    gated = _project_html_gate(request)
+    if gated is not None:
+        return gated
     if get_paths() is None:
         return _redirect_single_or_none(request, "/upload")
+    if get_url_prefix() and not runner.is_running(get_paths().name):
+        return _stopped()
     return _page("upload", "index.html")

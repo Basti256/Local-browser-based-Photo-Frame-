@@ -173,6 +173,10 @@ def try_pin(paths, pin: str) -> None:
 def set_admin_session(response: Response, project: str, request: Request) -> None:
     token = _serializer().dumps({"p": project})
     secure = request.url.scheme == "https" or request.headers.get("x-forwarded-proto", "") == "https"
+    from server.routing import with_prefix
+    cookie_path = with_prefix("/") or "/"
+    if cookie_path != "/":
+        cookie_path = cookie_path.rstrip("/") or "/"
     response.set_cookie(
         COOKIE_NAME,
         token,
@@ -180,12 +184,18 @@ def set_admin_session(response: Response, project: str, request: Request) -> Non
         httponly=True,
         samesite="lax",
         secure=secure,
-        path="/",
+        path=cookie_path,
     )
 
 
 def clear_admin_session(response: Response) -> None:
-    response.delete_cookie(COOKIE_NAME, path="/")
+    from server.routing import with_prefix
+    cookie_path = with_prefix("/") or "/"
+    if cookie_path != "/":
+        cookie_path = cookie_path.rstrip("/") or "/"
+    response.delete_cookie(COOKIE_NAME, path=cookie_path)
+    if cookie_path != "/":
+        response.delete_cookie(COOKIE_NAME, path="/")
 
 
 def admin_project(request: Request) -> str | None:

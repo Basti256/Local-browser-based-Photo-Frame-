@@ -41,8 +41,8 @@
     prev.classList.remove("is-empty");
     img.style.display = "block";
     var src = name.indexOf("/") === 0 || /^https?:/i.test(name)
-      ? name
-      : "/header/" + encodeURIComponent(name);
+      ? (global.pfUrl && name.indexOf("/") === 0 && name.indexOf("//") !== 0 ? global.pfUrl(name) : name)
+      : (global.pfUrl ? global.pfUrl("/header/" + encodeURIComponent(name)) : ("/header/" + encodeURIComponent(name)));
     img.onload = function () { applyToImg(img, rot); };
     if (img.getAttribute("src") === src && img.complete) applyToImg(img, rot);
     else img.src = src;

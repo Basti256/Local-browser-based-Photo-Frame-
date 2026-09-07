@@ -84,7 +84,7 @@ async function loadUploadConfig(){
     const btnColor = cfg.upload_button_color || "#ff4b5c";
     document.querySelectorAll(".upload-btn").forEach(b => b.style.background = btnColor);
     const imageRaw = cfg.upload_image || "";
-    const image = (!imageRaw) ? "" : (imageRaw.startsWith("/") || imageRaw.startsWith("http") ? imageRaw : ("/header/" + imageRaw));
+    const image = (!imageRaw) ? "" : (imageRaw.startsWith("http") ? imageRaw : (typeof pfUrl === "function" ? pfUrl(imageRaw.startsWith("/") ? imageRaw : ("/header/" + imageRaw)) : (imageRaw.startsWith("/") ? imageRaw : ("/header/" + imageRaw))));
     const wrap = document.getElementById("headerWrap");
     const img = document.getElementById("headerImg");
     if(image){
