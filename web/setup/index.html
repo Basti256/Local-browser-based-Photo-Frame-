@@ -401,7 +401,7 @@ async function loadCatalog(){
   if (bglist) {
     bglist.innerHTML = files.map(f => `
       <div class="thumb" data-file="${esc(f)}">
-        <img src="/api/setup/backgrounds/${encodeURIComponent(f)}" alt="">
+        <div class="pic"><img src="/api/setup/backgrounds/${encodeURIComponent(f)}" alt="" width="124" height="80"></div>
         <p class="muted">${esc(f)}</p>
         <button type="button" class="danger delBg">Löschen</button>
       </div>`).join("") || "<p class='muted'>Keine Standardhintergründe</p>";

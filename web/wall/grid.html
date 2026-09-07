@@ -121,11 +121,14 @@ flex-shrink:0;
 }
 </style>
 <link rel="stylesheet" href="/static/background.css">
+<link rel="stylesheet" href="/static/wall-rotate.css">
 <script src="/static/background.js"></script>
 <script src="/static/comments.js"></script>
+<script src="/static/wall-rotate.js"></script>
 </head>
 
 <body>
+<div id="wallStage">
 
 <div id="debugOverlay"></div>
 
@@ -358,7 +361,7 @@ addDebugLog("spawn col "+colIndex+": "+file)
 let cols=Math.max(1,parseInt(config.grid_columns)||4)
 let spacingCol="grid_spacing_columns"in config?Math.max(0,parseInt(config.grid_spacing_columns)||0):(config.grid_spacing_rows!=null?Math.max(0,parseInt(config.grid_spacing_rows)||0):20)
 let spacingRow="grid_spacing_rows"in config?Math.max(0,parseInt(config.grid_spacing_rows)||0):(config.grid_spacing!=null?Math.max(0,parseInt(config.grid_spacing)||0):0)
-let colWidth=Math.max(1,(window.innerWidth-(cols-1)*spacingCol)/cols)
+let colWidth=Math.max(1,(wallInnerWidth()-(cols-1)*spacingCol)/cols)
 let size=colWidth
 let startX=colIndex*(colWidth+spacingCol)
 
@@ -409,7 +412,7 @@ spacer.style.minHeight=spacingRow+"px"
 cell.appendChild(spacer)
 }
 
-let startY=spawnTop!=null?spawnTop:window.innerHeight+50
+let startY=spawnTop!=null?spawnTop:wallInnerHeight()+50
 
 cell.style.width=size+"px"
 cell.style.left=startX+"px"
@@ -418,7 +421,7 @@ cell.style.top=startY+"px"
 document.getElementById("gridContainer").appendChild(cell)
 
 let duration=(parseFloat(config.grid_animation_duration||config.grid_interval)||8)*1000
-let travelDist=window.innerHeight+200
+let travelDist=wallInnerHeight()+200
 let speedPxPerSec=travelDist/(duration/1000)
 
 let spawnTime=Date.now()
@@ -434,7 +437,7 @@ let elapsed=(Date.now()-startTime)/1000
 let y=startY-speedPxPerSec*elapsed
 cell.style.top=y+"px"
 
-let rect=cell.getBoundingClientRect()
+let rect=wallClientRect(cell)
 if(rect.bottom<-50) return
 
 requestAnimationFrame(animate)
@@ -447,7 +450,7 @@ function startExitWatcher(){
 function check(){
 if(!document.body.contains(cell)) return
 
-let rect=cell.getBoundingClientRect()
+let rect=wallClientRect(cell)
 let col=parseInt(cell.dataset.colIndex,10)
 
 if(rect.bottom<-50){
@@ -464,7 +467,7 @@ let cellsLeft=Array.from(document.querySelectorAll(".gridCell")).filter(c=>parse
 let spawnTop=null
 if(cellsLeft.length>0){
 let maxBottom=-Infinity
-for(let c of cellsLeft){ let b=c.getBoundingClientRect().bottom; if(b>maxBottom) maxBottom=b }
+for(let c of cellsLeft){ let b=wallClientRect(c).bottom; if(b>maxBottom) maxBottom=b }
 spawnTop=maxBottom+spacingRow
 }
 spawnImage(col,spawnTop)
@@ -490,7 +493,7 @@ let cellsLeft=Array.from(document.querySelectorAll(".gridCell")).filter(c=>parse
 let spawnTop=null
 if(cellsLeft.length>0){
 let maxBottom=-Infinity
-for(let c of cellsLeft){ let b=c.getBoundingClientRect().bottom; if(b>maxBottom) maxBottom=b }
+for(let c of cellsLeft){ let b=wallClientRect(c).bottom; if(b>maxBottom) maxBottom=b }
 spawnTop=maxBottom+spacingRow
 }
 spawnImage(col,spawnTop)
@@ -629,10 +632,10 @@ if(cellsInCol.length===0) continue
 let bottomMost=null
 let maxBottom=-Infinity
 for(let c of cellsInCol){
-let b=c.getBoundingClientRect().bottom
+let b=wallClientRect(c).bottom
 if(b>maxBottom){ maxBottom=b; bottomMost=c }
 }
-let spawnThreshold=window.innerHeight+200
+let spawnThreshold=wallInnerHeight()+200
 if(bottomMost&&maxBottom<=spawnThreshold&&!bottomMost.dataset.spawnedNext){
 bottomMost.dataset.spawnedNext="1"
 let spawnTop=maxBottom+spacingRow
@@ -651,6 +654,7 @@ init()
 
 </script>
 
+</div>
 </body>
 
 </html>

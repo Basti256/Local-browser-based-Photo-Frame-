@@ -15,9 +15,11 @@
 <script src="/static/background.js"></script>
 <script src="/static/comments.js"></script>
 <script src="/static/comment-fonts.js"></script>
+<script src="/static/wall-rotate.js"></script>
 
 <link rel="stylesheet" href="/static/banner.css">
 <link rel="stylesheet" href="/static/background.css">
+<link rel="stylesheet" href="/static/wall-rotate.css">
 <style>
 
 body{
@@ -232,6 +234,7 @@ overflow:hidden;
 
 
 <body>
+<div id="wallStage">
 
 <div id="debugOverlay"></div>
 <div id="laneDebugOverlay"></div>
@@ -304,7 +307,7 @@ return Math.max(1, img, vid)
 function spawnLaneCenter(i){
 let laneCount=spawnLaneCount()
 let margin=spawnMaxFrameSize()/2
-let inner=Math.max(0, window.innerWidth-2*margin)
+let inner=Math.max(0, wallInnerWidth()-2*margin)
 if(laneCount<=1) return margin+inner/2
 return margin+(i/(laneCount-1))*inner
 }
@@ -326,7 +329,7 @@ return Math.round(deg*10)/10
 }
 
 function burstCenterX(){
-return window.innerWidth*(0.5+0.5*Math.sin(burstAngleDeg()*Math.PI/180))
+return wallInnerWidth()*(0.5+0.5*Math.sin(burstAngleDeg()*Math.PI/180))
 }
 
 function burstSpawnLeft(size){
@@ -344,12 +347,12 @@ return (minS+maxS)/2
 function pickSpawnX(size){
 let mode=spawnMode()
 if(mode==="random"){
-let maxX=Math.max(0, window.innerWidth-size)
+let maxX=Math.max(0, wallInnerWidth()-size)
 if(maxX<=1) return 0
 return Math.random()*maxX
 }
 if(mode==="burst") return burstSpawnLeft(size)
-let maxX=Math.max(0, window.innerWidth-size)
+let maxX=Math.max(0, wallInnerWidth()-size)
 let laneCount=spawnLaneCount()
 let order=String(config.spawn_lane_order||"random_apart").toLowerCase()
 if(order!=="random" && order!=="adjacent" && order!=="random_apart") order="random_apart"
@@ -359,8 +362,8 @@ return spawnLaneLeft(i, size)
 }
 let occupied=[]
 document.querySelectorAll(".photoFrame").forEach(f=>{
-let r=f.getBoundingClientRect()
-if(r.bottom<-20 || r.top>window.innerHeight+20) return
+let r=wallClientRect(f)
+if(r.bottom<-20 || r.top>wallInnerHeight()+20) return
 occupied.push({left:r.left, right:r.right, cx:(r.left+r.right)/2})
 })
 let minGap=Math.max(24, size*0.2)
@@ -425,7 +428,7 @@ chosenLane=pickFrom(allLanes())
 }
 spawnLaneCursor=chosenLane
 let chosen=laneX(chosenLane)
-let usable=Math.max(0, window.innerWidth-spawnMaxFrameSize())
+let usable=Math.max(0, wallInnerWidth()-spawnMaxFrameSize())
 let laneSpan=laneCount<=1?usable:usable/Math.max(1, laneCount-1)
 let jitter=(Math.random()-0.5)*laneSpan*0.2
 return Math.max(0, Math.min(maxX, chosen+jitter))
@@ -709,7 +712,7 @@ return
 }
 stopBurstDebug()
 let laneCount=spawnLaneCount()
-let key="lanes|"+laneCount+"|"+spawnMaxFrameSize()+"|"+window.innerWidth
+let key="lanes|"+laneCount+"|"+spawnMaxFrameSize()+"|"+wallInnerWidth()
 if(overlay.dataset.key===key){
 overlay.style.display="block"
 return
@@ -786,6 +789,7 @@ box.innerHTML =
 "VideoHighlights: "+currentVideoHighlights+" (Queue: "+videoHighlightQueue.length+")<br>"+
 "CenterHighlights: "+currentCenterHighlights+"<br>"+
 "Spawn: "+spawnLabel+"<br>"+
+"Anzeige: "+(window.wallDisplayRotation?wallDisplayRotation():0)+"°<br>"+
 "Cache: "+cacheOn+(config.cache_enabled?" (TTL "+cacheTtl+"min)":"")+"<br>"+
 "Bildschirm wach: "+wakeLockStatus
 
@@ -1343,7 +1347,7 @@ highlight_color:config.image_highlight_color,
 flight_path_mode:config.image_flight_path_mode||"random"
 }
 
-let drift=(Math.random()*2-1)*(window.innerWidth*(cfg.drift_strength||0.2))
+let drift=(Math.random()*2-1)*(wallInnerWidth()*(cfg.drift_strength||0.2))
 function finiteNumber(value, fallback){
 let n=Number(value)
 return Number.isFinite(n)?n:fallback
@@ -1375,7 +1379,7 @@ return "translate(0px, 0px) rotate(0deg)"
 
 function flyOffscreenTransform(){
 let startTop=parseFloat(frame.style.top)
-if(Number.isNaN(startTop)) startTop=window.innerHeight
+if(Number.isNaN(startTop)) startTop=wallInnerHeight()
 return "translate("+drift+"px,"+(-(startTop+frameClearance()))+"px) rotate("+rot+"deg)"
 }
 
@@ -1389,7 +1393,7 @@ frame.style.transform=flyOffscreenTransform()
 
 function startFlight(){
 if(cfg.flight_path_mode==="bounce"){
-startBounceFlight(startX, window.innerHeight, size, duration, rot)
+startBounceFlight(startX, wallInnerHeight(), size, duration, rot)
 }else{
 beginCssFly()
 }
@@ -1402,7 +1406,7 @@ let x = startX
 let y = startY
 let totalDist = startY + frameClearance()
 let velocityY = totalDist / durationSec
-let velocityX = (window.innerWidth * (cfg.drift_strength||0.2)) / durationSec
+let velocityX = (wallInnerWidth() * (cfg.drift_strength||0.2)) / durationSec
 if(drift<0) velocityX = -velocityX
 let lastTime = performance.now()
 
@@ -1416,12 +1420,12 @@ lastTime = now
 x += velocityX * dt
 y -= velocityY * dt
 
-let rect = frame.getBoundingClientRect()
+let rect = wallClientRect(frame)
 let w = rect.width
 let h = rect.height
 
 if(x <= 0){ velocityX = Math.abs(velocityX); x = 0 }
-if(x + w >= window.innerWidth){ velocityX = -Math.abs(velocityX); x = window.innerWidth - w }
+if(x + w >= wallInnerWidth()){ velocityX = -Math.abs(velocityX); x = wallInnerWidth() - w }
 
 frame.style.left = x + "px"
 frame.style.top = y + "px"
@@ -1446,14 +1450,14 @@ if(!document.body.contains(frame)){
     return
 }
 
-let rect = frame.getBoundingClientRect()
+let rect = wallClientRect(frame)
 
 // Entfernen, sobald der Frame klar außerhalb des sichtbaren Bereichs liegt
 if(
     rect.bottom < -50 ||                    // komplett über dem Bildschirm
-    rect.top    > window.innerHeight + 50 ||// weit unterhalb
+    rect.top    > wallInnerHeight() + 50 ||// weit unterhalb
     rect.right  < -50 ||                    // weit links draußen
-    rect.left   > window.innerWidth + 50    // weit rechts draußen
+    rect.left   > wallInnerWidth() + 50    // weit rechts draußen
 ){
 
     // Positionsbasierter Exit jetzt für Bilder und Videos
@@ -1545,7 +1549,7 @@ processHighlightQueue()
 
 frame.style.transition="opacity "+exitMs+"ms ease, left "+exitMs+"ms ease, top "+exitMs+"ms ease, transform "+exitMs+"ms ease, box-shadow "+exitMs+"ms ease"
 frame.style.left=startX+"px"
-frame.style.top=window.innerHeight+"px"
+frame.style.top=wallInnerHeight()+"px"
 frame.style.transform="translate(0px, 0px) scale(1)"
 frame.style.zIndex="100"
 
@@ -1652,7 +1656,7 @@ let useCenterHighlight=isHighlight && config.center_highlight_enabled
 if(useCenterHighlight){
 
 let screenPercent=config.center_highlight_screen_percent??30
-let targetSize=(screenPercent/100)*Math.min(window.innerWidth,window.innerHeight)
+let targetSize=(screenPercent/100)*Math.min(wallInnerWidth(),wallInnerHeight())
 let centerScale=Math.max(0.1,targetSize/size)
 let centerVar=config.center_highlight_position_variation||0
 let centerOffsetX=(Math.random()*2-1)*centerVar
@@ -1667,7 +1671,7 @@ frame.style.zIndex="400"
 }else{
 
 frame.style.left=startX+"px"
-frame.style.top=window.innerHeight+"px"
+frame.style.top=wallInnerHeight()+"px"
 
 }
 
@@ -1719,7 +1723,7 @@ processHighlightQueue()
 
 frame.style.transition="opacity "+exitMs+"ms ease, left "+exitMs+"ms ease, top "+exitMs+"ms ease, transform "+exitMs+"ms ease, box-shadow "+exitMs+"ms ease"
 frame.style.left=startX+"px"
-frame.style.top=window.innerHeight+"px"
+frame.style.top=wallInnerHeight()+"px"
 frame.style.transform="translate(0px, 0px) scale(1)"
 frame.style.zIndex="100"
 
@@ -1793,6 +1797,7 @@ init()
 
 </script>
 
+</div>
 </body>
 
 </html>

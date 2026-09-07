@@ -44,9 +44,8 @@
   }
 
   function layout(root, cfg, img) {
-    var box = root.getBoundingClientRect();
-    var W = box.width;
-    var H = box.height;
+    var W = root.clientWidth || root.getBoundingClientRect().width;
+    var H = root.clientHeight || root.getBoundingClientRect().height;
     var nw = img.naturalWidth;
     var nh = img.naturalHeight;
     if (!nw || !nh || W < 2 || H < 2) return;
@@ -78,8 +77,7 @@
   var PREVIEW_MAX_H = 300;
 
   function layoutPreview(root, cfg, img) {
-    var box = root.getBoundingClientRect();
-    var W = box.width;
+    var W = root.clientWidth || root.getBoundingClientRect().width;
     var nw = img.naturalWidth;
     var nh = img.naturalHeight;
     if (!nw || !nh || W < 2) return;

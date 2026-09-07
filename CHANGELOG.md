@@ -4,6 +4,18 @@ Alle wesentlichen Änderungen am Local-browser-based-Photo-Frame werden in diese
 
 ---
 
+## [2.20.0] – 2026-09-07
+
+### Neu
+
+- Wall: Anzeige am Gerät drehen (0° / 90° / 180° / 270°), wenn der Bildschirm selbst nicht hochkant kann. Gilt für Fly und Grid; die Auswahl bleibt unten rechts bedienbar.
+
+### Behoben
+
+- `/setup` Vorlagen: Standardhintergründe als kleines Vorschaubild (nicht Originalgröße).
+
+---
+
 ## [2.19.0] – 2026-09-07
 
 ### Neu
