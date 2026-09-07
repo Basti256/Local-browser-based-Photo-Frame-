@@ -23,3 +23,8 @@ th,td{text-align:left;padding:8px 4px;border-bottom:1px solid #333;}
 pre.log{background:#111;border:1px solid #333;border-radius:6px;padding:12px;max-height:480px;overflow:auto;white-space:pre-wrap;word-break:break-word;font-size:12px;line-height:1.4;}
 .row{display:flex;align-items:center;gap:8px;font-weight:600;}
 .row input{width:auto;}
+.log-actions{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;margin:12px 0;}
+.log-actions button{margin-top:0;}
+.log-refresh{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;}
+.log-refresh label{margin:0 0 4px;font-size:13px;}
+.log-refresh input{width:50px;padding:8px 4px;text-align:center;}

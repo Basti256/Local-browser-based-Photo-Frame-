@@ -85,12 +85,15 @@
 <option>ERROR</option>
 </select>
 <button type="button" id="saveLevel">Level speichern</button>
-<label for="logrefresh">Aktualisieren alle (Sekunden)</label>
-<input id="logrefresh" type="number" min="0" max="3600" value="5">
-<p class="muted">0 = aus. Läuft nur, solange dieser Reiter offen ist.</p>
+<div class="log-actions">
 <button type="button" id="refreshLogs" class="secondary">Jetzt aktualisieren</button>
 <button type="button" id="downloadLogs" class="secondary">Herunterladen</button>
 <button type="button" id="clearLogs" class="danger">Leeren</button>
+<div class="log-refresh">
+<label for="logrefresh">Ref. S</label>
+<input id="logrefresh" type="number" min="0" max="3600" value="5" title="Aktualisieren in Sekunden, 0 = aus">
+</div>
+</div>
 <div class="error" id="logerr" hidden></div>
 <div class="error" id="loglevelerr" hidden></div>
 <pre class="log" id="logtext"></pre>

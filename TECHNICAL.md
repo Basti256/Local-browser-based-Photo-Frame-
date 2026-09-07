@@ -3,7 +3,7 @@
 Handbuch der Software. Funktionen, Schnittstellen, Ports, Betrieb.
 Keine personenbezogenen Daten. Keine Zugangsdaten.
 
-Version des beschriebenen Stands: 2.18.1
+Version des beschriebenen Stands: 2.18.2
 
 ---
 

@@ -4,6 +4,14 @@ Alle wesentlichen Änderungen am Local-browser-based-Photo-Frame werden in diese
 
 ---
 
+## [2.18.2] – 2026-09-07
+
+### Geändert
+
+- Protokoll: Intervallfeld (Ref. S, 50 px) rechtsbündig neben Leeren.
+
+---
+
 ## [2.18.1] – 2026-09-07
 
 ### Behoben
