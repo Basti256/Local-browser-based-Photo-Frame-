@@ -3,7 +3,7 @@
 Handbuch der Software. Funktionen, Schnittstellen, Ports, Betrieb.
 Keine personenbezogenen Daten. Keine Zugangsdaten.
 
-Version des beschriebenen Stands: 2.18.0
+Version des beschriebenen Stands: 2.18.1
 
 ---
 
@@ -170,7 +170,7 @@ Projektseiten, APIs, WebSocket, Medien und `sw.js` hängen unter `/{name}/…` (
 | Methode | Pfad | Funktion |
 |---------|------|----------|
 | GET | `/` | Ohne Prefix: Umleitung auf `/setup`. Unter `/{name}`: Wall |
-| GET | `/{name}/wall` | Fly oder Grid, wenn das Projekt läuft. Gestoppt: Hinweisseite. Unbekannt: 404. Modus `network` auf der öffentlichen Adresse: 404 |
+| GET | `/{name}/wall` | Fly oder Grid, wenn das Projekt läuft. Gestoppt: Hinweisseite. Unbekannt: 404. Modus `network` nur über private LAN-IP, localhost oder `*.local`; sonst 404 |
 | GET | `/{name}/upload` | Gäste-Upload (Network nur LAN; Public auch öffentlich) |
 | GET | `/{name}/admin` | Wand-Einstellungen, nach PIN |
 | GET | `/{name}/admin/classic` | Vorherige Admin-HTML, nach PIN |
@@ -183,7 +183,7 @@ Projektseiten, APIs, WebSocket, Medien und `sw.js` hängen unter `/{name}/…` (
 | GET | `/p/{name}/upload` | Entsprechend Upload |
 | GET | `/p/{name}/admin` | Entsprechend Admin |
 | GET | `/p/{name}/browser` | Entsprechend Medienbrowser |
-| GET | `/setup` | Erststart, Projekte, Server, Protokoll |
+| GET | `/setup` | Erststart, Projekte, Server, Protokoll (Log-Level, Auto-Aktualisierung) |
 | GET | `/login` | Anmeldung als Admin |
 | GET | `/logout` | Master-Session löschen |
 
@@ -237,10 +237,12 @@ Unter `/{name}/` gelten dieselben APIs und Dateipfade wie ohne Prefix: `/ws`, `/
 
 Feld `network_mode` in `projects/<name>/config.json`. Zulässig: `network`, `public`. Die öffentliche Adresse steht in `data/runtime.json` (`public_host`, `public_https`; Eingabe mit `http://` oder `https://`).
 
-| Wert | Anzeige-URL (QR, Links) | `/{name}` |
-|------|-------------------------|-----------|
-| `network` | `http://<lokale-IPv4>:<serverport>/{name}` | nur LAN-Host |
-| `public` | `https://<public_host>/{name}` bzw. `http://<public_host>/{name}` | LAN und öffentliche Adresse |
+| Wert | LAN `http://<private-IPv4>:<serverport>/{name}` | Öffentliche Adresse `https://<public_host>/{name}` |
+|------|--------------------------------------------------|-----------------------------------------------------|
+| `network` | ja | nein (404, der Pfad existiert nicht) |
+| `public` | ja | ja |
+
+Network gilt nur, wenn **jeder** gemeldete Host (`Host`, `X-Forwarded-Host`, `Forwarded`) eine private/loopback-IP, `localhost` oder `*.local` ist. Reicht der Proxy `X-Forwarded-Host: frame.example.com` durch, bleibt Network unsichtbar, auch wenn `Host` die LAN-IP des Backends ist.
 
 Die Anwendung nimmt selbst nur HTTP entgegen. Das Schema der öffentlichen Adresse ändert ausschließlich die ausgegebenen URLs. QR-Code Upload im Public-Modus: `https://<host>/{name}/upload`. Reverse-Proxy nur auf den Serverport.
 

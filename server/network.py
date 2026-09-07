@@ -1,4 +1,5 @@
 """Netzwerk-Utilities: LAN-IP und projektbezogene Basis-URL."""
+import ipaddress
 import socket
 import urllib.request
 
@@ -70,6 +71,66 @@ def is_public_http_host(host: str) -> bool:
     want_name, _want_full = _host_key(wanted)
     got_name, _got_full = _host_key(incoming)
     return bool(want_name) and want_name == got_name
+
+
+def _hostname_only(host: str) -> str:
+    name, _full = _host_key(sanitize_public_host(host or ""))
+    if name.startswith("[") and name.endswith("]"):
+        name = name[1:-1]
+    return name
+
+
+def is_lan_http_host(host: str) -> bool:
+    """True für private/loopback IP, localhost und *.local."""
+    name = _hostname_only(host)
+    if not name:
+        return False
+    if name in ("localhost", "::1"):
+        return True
+    if name.endswith(".local"):
+        return True
+    try:
+        ip = ipaddress.ip_address(name)
+    except ValueError:
+        return False
+    return bool(ip.is_private or ip.is_loopback or ip.is_link_local)
+
+
+def collect_request_hosts(host: str = "", forwarded_host: str = "", forwarded: str = "") -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+
+    def add(raw: str) -> None:
+        for part in (raw or "").split(","):
+            part = part.strip()
+            if not part:
+                continue
+            key = part.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(part)
+
+    add(forwarded_host)
+    add(host)
+    for item in (forwarded or "").split(","):
+        for piece in item.split(";"):
+            piece = piece.strip()
+            if piece.lower().startswith("host="):
+                add(piece.split("=", 1)[1].strip().strip('"'))
+    return out
+
+
+def request_is_lan(hosts: list[str] | str | None) -> bool:
+    """Network-Projekte nur, wenn jeder gemeldete Host eine LAN-Adresse ist."""
+    if isinstance(hosts, str):
+        hosts = [hosts] if hosts.strip() else []
+    cleaned = [str(h).strip() for h in (hosts or []) if str(h).strip()]
+    if not cleaned:
+        return False
+    if any(is_public_http_host(h) for h in cleaned):
+        return False
+    return all(is_lan_http_host(h) for h in cleaned)
 
 
 def lan_origin(request, port: int) -> str:

@@ -4,6 +4,18 @@ Alle wesentlichen Änderungen am Local-browser-based-Photo-Frame werden in diese
 
 ---
 
+## [2.18.1] – 2026-09-07
+
+### Behoben
+
+- Network-Projekte nur noch über private LAN-IP, localhost oder `*.local`. Hinter Reverse-Proxy zählt `X-Forwarded-Host`: `frame.example.com/{name}` ist 404, `192.168.x.x:8000/{name}` bleibt erreichbar. Public-Projekte gelten auf beiden.
+
+### Neu
+
+- Protokoll: Log-Level (DEBUG/INFO/WARNING/ERROR) wieder auf dem Reiter. Automatische Aktualisierung in einstellbaren Sekunden, solange der Reiter offen ist.
+
+---
+
 ## [2.18.0] – 2026-09-07
 
 ### Neu

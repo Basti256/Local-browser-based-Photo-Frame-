@@ -1,6 +1,6 @@
 # Local-browser-based-Photo-Frame
 
-**Version 2.18.0**
+**Version 2.18.1**
 
 Browserbasierter Foto-Rahmen: Gäste laden Bilder und Videos über eine Upload-Seite. Eine Wall zeigt die Medien in Echtzeit. Die Einrichtung liegt unter `/setup` (Konto **Admin**). Die Wand-Einstellungen unter `/admin` sind per Projekt-PIN geschützt.
 
@@ -59,7 +59,7 @@ Nach dem Start:
 - Erstkonfiguration: `http://127.0.0.1:8000/setup`
 - Anmeldung (Admin): `http://127.0.0.1:8000/login`
 
-Der Port 8000 ist der Serverport. Alle Projekte hängen daran, zum Beispiel `http://192.168.x.x:8000/<projekt>/wall`. Öffentlich (Reverse-Proxy auf denselben Port, nur Projekte im Modus Public): `https://frame.example.com/<projekt>/wall`. Im Modus Network existiert dieser Pfad auf der öffentlichen Adresse nicht. Unter `/setup` Starten/Stoppen.
+Der Port 8000 ist der Serverport. **Public**-Projekte: `http://192.168.x.x:8000/<projekt>/wall` und `https://frame.example.com/<projekt>/wall`. **Network**-Projekte: nur die LAN-IP, auf der öffentlichen Domain existiert der Pfad nicht. Unter `/setup` Starten/Stoppen.
 
 Beim Erststart setzt du das Admin-Passwort und den Serverport. Ändert sich der Port, startet der Server neu; die Seite wartet mit Timer und Link auf die neue Adresse. Ein Projekt ist optional und wird danach unter `/setup` angelegt. Passwort und Projekt-PINs werden als Argon2id-Hash gespeichert. `data/` und `projects/` entstehen lokal und gehören nicht ins Git.
 

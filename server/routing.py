@@ -37,21 +37,30 @@ def split_segment(path: str) -> tuple[str, str]:
     return first, remainder
 
 
-def _scope_host(scope: Scope) -> str:
+def _scope_hosts(scope: Scope) -> list[str]:
+    from server.network import collect_request_hosts
     headers = scope.get("headers") or []
-    forwarded = ""
+    forwarded_host = ""
     host = ""
+    forwarded = ""
     for key, value in headers:
         name = key.decode("latin-1").lower() if isinstance(key, (bytes, bytearray)) else str(key).lower()
         text = value.decode("latin-1") if isinstance(value, (bytes, bytearray)) else str(value)
-        if name == "x-forwarded-host" and not forwarded:
-            forwarded = text.split(",")[0].strip()
+        if name == "x-forwarded-host" and not forwarded_host:
+            forwarded_host = text
         elif name == "host" and not host:
-            host = text.split(",")[0].strip()
-    return forwarded or host
+            host = text
+        elif name == "forwarded" and not forwarded:
+            forwarded = text
+    return collect_request_hosts(host=host, forwarded_host=forwarded_host, forwarded=forwarded)
 
 
-def resolve_control_path(path: str, running: set[str] | None = None, http_host: str = "") -> PrefixResult:
+def resolve_control_path(
+    path: str,
+    running: set[str] | None = None,
+    http_host: str = "",
+    http_hosts: list[str] | None = None,
+) -> PrefixResult:
     first, remainder = split_segment(path)
     if not first or is_reserved_segment(first):
         return PrefixResult(path=path, project=None, prefix="", status=None)
@@ -66,10 +75,13 @@ def resolve_control_path(path: str, running: set[str] | None = None, http_host: 
                 status=STATUS_MISSING,
             )
         return PrefixResult(path=path, project=None, prefix="", status=None)
-    from server.network import is_public_http_host, normalize_mode
+    from server.network import normalize_mode, request_is_lan
     from server.project import ProjectPaths, load_project_config
     cfg = load_project_config(ProjectPaths(name))
-    if normalize_mode(cfg.get("network_mode")) != "public" and is_public_http_host(http_host):
+    hosts = list(http_hosts or [])
+    if http_host:
+        hosts.append(http_host)
+    if normalize_mode(cfg.get("network_mode")) != "public" and not request_is_lan(hosts):
         return PrefixResult(path=path, project=None, prefix="", status=None)
     prefix = "/" + name
     redirect = None
@@ -129,7 +141,7 @@ def bind_project_scope(scope: Scope) -> Scope:
         state["redirect"] = None
         scope["state"] = state
         return scope
-    result = resolve_control_path(path, http_host=_scope_host(scope))
+    result = resolve_control_path(path, http_hosts=_scope_hosts(scope))
     if result.redirect:
         state["redirect"] = result.redirect
         state["project_name"] = result.project

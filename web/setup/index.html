@@ -72,8 +72,11 @@
 <div class="error" id="updateerr" hidden></div>
 <button type="button" id="checkUpdate">Auf Updates prüfen</button>
 <button type="button" id="doUpdate" class="secondary">Aktualisieren</button>
+</div>
 
+<div id="tabLogs" hidden>
 <h2>Protokoll</h2>
+<p class="muted">Die letzten 72 Stunden. Keine Passwörter oder PINs.</p>
 <label for="loglevel">Log-Level</label>
 <select id="loglevel">
 <option>DEBUG</option>
@@ -82,16 +85,14 @@
 <option>ERROR</option>
 </select>
 <button type="button" id="saveLevel">Level speichern</button>
-<div class="error" id="loglevelerr" hidden></div>
-</div>
-
-<div id="tabLogs" hidden>
-<h2>Protokoll</h2>
-<p class="muted">Die letzten 72 Stunden. Keine Passwörter oder PINs.</p>
-<button type="button" id="refreshLogs" class="secondary">Aktualisieren</button>
+<label for="logrefresh">Aktualisieren alle (Sekunden)</label>
+<input id="logrefresh" type="number" min="0" max="3600" value="5">
+<p class="muted">0 = aus. Läuft nur, solange dieser Reiter offen ist.</p>
+<button type="button" id="refreshLogs" class="secondary">Jetzt aktualisieren</button>
 <button type="button" id="downloadLogs" class="secondary">Herunterladen</button>
 <button type="button" id="clearLogs" class="danger">Leeren</button>
 <div class="error" id="logerr" hidden></div>
+<div class="error" id="loglevelerr" hidden></div>
 <pre class="log" id="logtext"></pre>
 </div>
 </div>
@@ -106,6 +107,8 @@
 </div>
 <script>
 let waitTimer = null;
+let logTimer = null;
+let logTabOpen = false;
 function showErr(id, msg){
   const el = document.getElementById(id);
   el.textContent = msg;
@@ -262,7 +265,31 @@ function showTab(which){
   document.getElementById("tabProjectsBtn").classList.toggle("active", which === "projects");
   document.getElementById("tabServerBtn").classList.toggle("active", which === "server");
   document.getElementById("tabLogsBtn").classList.toggle("active", which === "logs");
-  if (which === "logs") loadLogs();
+  if (which === "logs") startLogRefresh();
+  else stopLogRefresh();
+}
+function logRefreshSec(){
+  const n = parseInt(document.getElementById("logrefresh").value, 10);
+  if (!n || n < 1) return 0;
+  return Math.min(n, 3600);
+}
+function stopLogRefresh(){
+  logTabOpen = false;
+  if (logTimer) {
+    clearInterval(logTimer);
+    logTimer = null;
+  }
+}
+function startLogRefresh(){
+  stopLogRefresh();
+  logTabOpen = true;
+  loadLogs();
+  const sec = logRefreshSec();
+  if (!sec) return;
+  logTimer = setInterval(() => {
+    if (document.getElementById("tabLogs").hidden || document.hidden) return;
+    loadLogs();
+  }, sec * 1000);
 }
 function lockHtml(locks){
   const bits = [];
@@ -278,7 +305,11 @@ async function loadLogs(){
   const res = await fetch("/api/setup/logs");
   if (res.status === 401) { location.href = "/login?next=/setup"; return; }
   const d = await res.json().catch(() => ({}));
-  document.getElementById("logtext").textContent = d.text || "";
+  const pre = document.getElementById("logtext");
+  const atBottom = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 48;
+  pre.textContent = d.text || "";
+  if (d.level) document.getElementById("loglevel").value = d.level;
+  if (atBottom) pre.scrollTop = pre.scrollHeight;
 }
 async function loadMain(){
   const res = await fetch("/api/setup/state");
@@ -456,7 +487,22 @@ document.getElementById("saveLevel").onclick = async () => {
   const res = await postJson("/api/runtime", {log_level: document.getElementById("loglevel").value});
   const data = await res.json().catch(() => ({}));
   if (!res.ok) { showErr("loglevelerr", detailMsg(data) || "Level speichern fehlgeschlagen"); return; }
+  loadLogs();
 };
+document.getElementById("logrefresh").onchange = () => {
+  localStorage.setItem("pfLogRefreshSec", document.getElementById("logrefresh").value);
+  if (logTabOpen) startLogRefresh();
+};
+(function(){
+  const stored = localStorage.getItem("pfLogRefreshSec");
+  if (stored !== null) document.getElementById("logrefresh").value = stored;
+})();
+document.addEventListener("visibilitychange", () => {
+  if (!logTabOpen) return;
+  if (document.hidden) {
+    if (logTimer) { clearInterval(logTimer); logTimer = null; }
+  } else startLogRefresh();
+});
 document.getElementById("refreshLogs").onclick = () => loadLogs();
 document.getElementById("downloadLogs").onclick = () => { location.href = "/api/setup/logs/download"; };
 document.getElementById("clearLogs").onclick = async () => {

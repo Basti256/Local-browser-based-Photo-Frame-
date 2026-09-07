@@ -148,15 +148,25 @@ def _project_html_gate(request: Request):
     return None
 
 
+def _request_hosts(request: Request | None) -> list[str]:
+    from server.network import collect_request_hosts
+    if request is None:
+        return []
+    return collect_request_hosts(
+        host=request.headers.get("host") or "",
+        forwarded_host=request.headers.get("x-forwarded-host") or "",
+        forwarded=request.headers.get("forwarded") or "",
+    )
+
+
 def _redirect_single_or_none(request: Request, dest: str):
-    from server.network import is_public_http_host, normalize_mode
+    from server.network import normalize_mode, request_is_lan
     from server.project import ProjectPaths, load_project_config
-    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or ""
-    public = is_public_http_host(host)
+    lan = request_is_lan(_request_hosts(request))
     running = []
     for name in runner.running_names():
         mode = normalize_mode(load_project_config(ProjectPaths(name)).get("network_mode"))
-        if public and mode != "public":
+        if not lan and mode != "public":
             continue
         running.append(name)
     if len(running) == 1:
@@ -165,17 +175,14 @@ def _redirect_single_or_none(request: Request, dest: str):
 
 
 def _legacy_project_redirect(name: str, dest: str, request: Request | None = None):
-    from server.network import is_public_http_host, normalize_mode
+    from server.network import normalize_mode, request_is_lan
     from server.project import ProjectPaths, find_project_by_slug, load_project_config
     found = find_project_by_slug(name)
     if not found:
         return _no_project()
     name = found
     cfg = load_project_config(ProjectPaths(name))
-    host = ""
-    if request is not None:
-        host = request.headers.get("x-forwarded-host") or request.headers.get("host") or ""
-    if normalize_mode(cfg.get("network_mode")) != "public" and is_public_http_host(host):
+    if normalize_mode(cfg.get("network_mode")) != "public" and not request_is_lan(_request_hosts(request)):
         return HTMLResponse("Not Found", status_code=404)
     if not runner.is_running(name):
         return _stopped()
