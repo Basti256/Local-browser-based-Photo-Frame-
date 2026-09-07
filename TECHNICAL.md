@@ -3,7 +3,7 @@
 Handbuch der Software. Funktionen, Schnittstellen, Ports, Betrieb.
 Keine personenbezogenen Daten. Keine Zugangsdaten.
 
-Version des beschriebenen Stands: 2.17.1
+Version des beschriebenen Stands: 2.18.0
 
 ---
 
@@ -35,7 +35,7 @@ Python-Pakete: siehe `requirements.txt`.
 
 ## 3. Prozessmodell
 
-Ein Serverprozess. Die Einrichtung hängt am Steuer-Port. Derselbe Port liefert laufende Projekte unter `/{name}/…`. Zusätzlich bekommt jedes gestartete Projekt einen eigenen TCP-Port für den LAN-Zugriff (weiterer Uvicorn-Listener, gleicher Prozess, ohne zweiten Lifespan).
+Ein Serverprozess. Alles hängt am Serverport: `/setup` und laufende Projekte unter `/{name}/…`. Keine zusätzlichen TCP-Ports je Projekt. Start/Stop schaltet nur, ob das Projekt unter seinem Pfad ausgeliefert wird.
 
 ```text
 python -m server [--host HOST] [--port PORT]
@@ -44,15 +44,15 @@ python -m server [--host HOST] [--port PORT]
 Startskripte `start.sh` und `start.bat` rufen denselben Einstieg auf. Updates: unter `/setup` (prüfen / einspielen) oder `update.sh` / `update.bat` (fast-forward `main`, pip, optional systemd-Neustart).
 
 Host ohne `--host`: `data/runtime.json` Feld `bind_host`, Standard `0.0.0.0`.
-Port ohne `--port`: `data/runtime.json` Feld `port`, Standard 8000. Das ist der Einrichtungs-Port (`/setup`).
+Port ohne `--port`: `data/runtime.json` Feld `port`, Standard 8000. Das ist der Serverport (`/setup` und alle Projektpfade).
 
-Ändert die Erstkonfiguration oder `/setup` den Einrichtungs-Port gegenüber dem laufenden Prozess, speichert der Server den Port und startet sich in einem eigenen Thread neu (nicht über FastAPI-Background-Tasks). `python -m server` entfernt `PHOTO_FRAME_SKIP_RESTART`, falls es in der Umgebung steht. Die Browserseite wartet 10 Sekunden, prüft die neue Adresse und wiederholt das, bis sie erreichbar ist. Zusätzlich gibt es einen direkten Link. Unter systemd beendet der Prozess sich; `Restart=always` holt ihn mit dem neuen Port zurück. Ohne systemd wird ein neuer Prozess gestartet. Unter Windows wird der Nachfolgeprozess aus der Job-Gruppe der Konsole gelöst, damit er den alten Prozess überlebt.
+Ändert die Erstkonfiguration oder `/setup` den Serverport gegenüber dem laufenden Prozess, speichert der Server den Port und startet sich in einem eigenen Thread neu (nicht über FastAPI-Background-Tasks). `python -m server` entfernt `PHOTO_FRAME_SKIP_RESTART`, falls es in der Umgebung steht. Die Browserseite wartet 10 Sekunden, prüft die neue Adresse und wiederholt das, bis sie erreichbar ist. Zusätzlich gibt es einen direkten Link. Unter systemd beendet der Prozess sich; `Restart=always` holt ihn mit dem neuen Port zurück. Ohne systemd wird ein neuer Prozess gestartet. Unter Windows wird der Nachfolgeprozess aus der Job-Gruppe der Konsole gelöst, damit er den alten Prozess überlebt.
 
-Nach dem Neustart startet der Prozess die in `running_projects` eingetragenen Projekte wieder.
+Nach dem Neustart setzt der Prozess die in `running_projects` eingetragenen Projekte wieder auf laufend.
 
-Bind-Adresse gilt nach diesem Neustart. Die Anzeige-URL (QR-Code) im Modus `network` nutzt nur den Projekt-Port. `/{name}` am Steuer-Port existiert in diesem Modus nicht. Im Modus `public` gilt die serverweite Domain (`public_host` in der Runtime) plus `/{name}` am Steuer-Port, ohne Projekt-Port.
+Bind-Adresse gilt nach diesem Neustart. Im LAN gilt `http://<lokale-IPv4>:<serverport>/{name}` für laufende Projekte (Network und Public). Auf dem Host der öffentlichen Adresse existiert `/{name}` nur im Modus `public` (sonst 404). Die öffentliche Adresse steht in der Runtime als Host plus Schema (`public_host`, `public_https`), Eingabe unter `/setup` als `https://…` oder `http://…`.
 
-Wall, Upload und Admin eines Projekts sind nur erreichbar, solange das Projekt unter `/setup` gestartet ist. Mehrere Projekte gleichzeitig: am Steuer-Port über verschiedene Pfade, im LAN je auf dem Projekt-Port. Einrichtung, Login und projektverwaltende APIs nur auf dem Steuer-Port, nicht unter `/{name}/`.
+Wall, Upload und Admin eines Projekts sind nur erreichbar, solange das Projekt unter `/setup` gestartet ist. Mehrere Projekte gleichzeitig: derselbe Serverport, verschiedene Pfade. Einrichtung, Login und projektverwaltende APIs nur ohne Projekt-Prefix, nicht unter `/{name}/`.
 
 ---
 
@@ -87,7 +87,7 @@ Wall, Upload und Admin eines Projekts sind nur erreichbar, solange das Projekt u
 
 `network_mode` `local`, `internal` → `network`. `tunnel` → `public`.
 
-Am Steuer-Port im Modus `public`: `/{name}/wall`, `/{name}/upload`, `/{name}/admin`. Im Modus `network` existiert dieser Pfad nicht (404). Am Projekt-Port: `/wall` ohne Prefix. `/setup` nur am Steuer-Port.
+Am Serverport im Modus `public`: `/{name}/wall`, `/{name}/upload`, `/{name}/admin` (LAN und öffentliche Adresse). Im Modus `network` gilt dasselbe nur über die LAN-Adresse; auf der öffentlichen Adresse 404. `/setup` ohne Projekt-Prefix.
 
 ---
 
@@ -97,7 +97,7 @@ Ablage unter `data/`. Nicht in der Versionskontrolle (nur leeres Verzeichnis mit
 
 | Datei | Inhalt |
 |-------|--------|
-| `runtime.json` | `port` (Einrichtung), `bind_host`, `active_project`, `running_projects`, `public_host`, `public_https`, `log_level` |
+| `runtime.json` | `port` (Serverport), `bind_host`, `active_project`, `running_projects`, `public_host`, `public_https`, `log_level`, `media_root` |
 | `auth.json` | Benutzer `Admin`, Passwort-Hash. Kein Klartext-Passwort. |
 | `secret.key` | Schlüssel für Session-Signatur |
 | `login_lock.json` | Fehlversuche und Sperrzeit für Setup-Login und Erstkonfiguration |
@@ -111,12 +111,11 @@ Ablage unter `data/`. Nicht in der Versionskontrolle (nur leeres Verzeichnis mit
 
 | Parameter | Wert |
 |-----------|------|
-| Einrichtungs-Port | 8000 Standard, Feld `port` in Runtime |
-| Projekt-Port | Feld `port` in `projects/<name>/config.json`. Beim Anlegen automatisch eindeutig. |
+| Serverport | 8000 Standard, Feld `port` in Runtime |
 | Protokoll der App | HTTP |
-| TLS | nicht in der App. Bei Public-HTTPS: Reverse-Proxy. |
+| TLS | nicht in der App. Bei Public-HTTPS: Reverse-Proxy. Schema steht in der öffentlichen Adresse. |
 
-Firewall: unter Windows eingehende Regel je geöffnetem Port (Einrichtung und jedes gestartete Projekt). Unter Linux keine automatische Regel.
+Firewall: unter Windows eingehende Regel für den Serverport. Unter Linux keine automatische Regel.
 
 ---
 
@@ -139,7 +138,7 @@ Gilt für `/setup` und projektverwaltende APIs. Es gibt genau ein Konto `Admin`.
 Gilt für `/admin` und schreibende Admin-APIs des aktiven Projekts. Beim Anlegen eines Projekts wird ein zufälliger 4-stelliger PIN erzeugt. Die Ziffern sieht nur die Einrichtungsseite (`/setup`, Master-Session). Prüfung weiterhin Argon2id. In `access.json` liegt der Hash und ein versiegelter Anzeigewert, keine Klartext-Ziffernfolge. Ein anderer PIN (4–10 Ziffern) kann unter `/setup` gesetzt werden.
 
 - Freischalten: `POST /api/admin/unlock`
-- Cookie `pf_admin`, HttpOnly, SameSite=Lax, gebunden an den Projektnamen, Path `/{name}` am Steuer-Port bzw. `/` am Projekt-Port, 12 Stunden
+- Cookie `pf_admin`, HttpOnly, SameSite=Lax, gebunden an den Projektnamen, Path `/{name}`, 12 Stunden
 - Logout: `GET /admin/logout`
 - Nach Fehlversuch n: Wartezeit `min(3600, 2^n)` Sekunden (erster Fehler: 2 s). Während der Sperre keine PIN-Prüfung. Die Wartezeit gilt projektweit. Korrekter PIN setzt den Zähler zurück.
 - Fehlt ein PIN (ältere Projekte): die Einrichtung erzeugt beim nächsten Laden einen neuen 4-stelligen PIN.
@@ -162,29 +161,29 @@ Zustandsändernde authentifizierte Anfragen: Header `Origin` muss zum Host der A
 
 ## 8. HTTP- und WebSocket-Schnittstellen
 
-Basis: Steuer-Port `http://<host>:<steuer-port>`. Reverse-Proxy/Tunnel spricht nur diesen Port. Öffentliche Pfade nutzen denselben Host.
+Basis: Serverport `http://<host>:<serverport>`. Reverse-Proxy spricht denselben Port. Öffentliche Pfade nutzen denselben Host plus `/{name}`.
 
-Projektseiten, APIs, WebSocket, Medien und `sw.js` hängen am Steuer-Port nur im Modus `public` unter `/{name}/…` (HTML setzt `meta name="pf-base"`). Am LAN-Projekt-Port dieselben Pfade ohne Prefix.
+Projektseiten, APIs, WebSocket, Medien und `sw.js` hängen unter `/{name}/…` (HTML setzt `meta name="pf-base"`). Ohne Prefix: `/setup`, Login, projektverwaltende APIs.
 
 ### Seiten
 
 | Methode | Pfad | Funktion |
 |---------|------|----------|
-| GET | `/` | Am Steuer-Port: Umleitung auf `/setup`. Am Projekt-Port oder unter `/{name}`: Wall |
-| GET | `/{name}/wall` | Nur Modus `public` am Steuer-Port. Fly oder Grid, wenn das Projekt läuft. Gestoppt: Hinweisseite. Unbekannt oder Modus `network`: 404 |
-| GET | `/{name}/upload` | Gäste-Upload (nur `public` am Steuer-Port) |
+| GET | `/` | Ohne Prefix: Umleitung auf `/setup`. Unter `/{name}`: Wall |
+| GET | `/{name}/wall` | Fly oder Grid, wenn das Projekt läuft. Gestoppt: Hinweisseite. Unbekannt: 404. Modus `network` auf der öffentlichen Adresse: 404 |
+| GET | `/{name}/upload` | Gäste-Upload (Network nur LAN; Public auch öffentlich) |
 | GET | `/{name}/admin` | Wand-Einstellungen, nach PIN |
 | GET | `/{name}/admin/classic` | Vorherige Admin-HTML, nach PIN |
 | GET | `/{name}/admin/browser` | Medienbrowser, nach PIN |
 | GET | `/{name}/admin/logout` | PIN-Sitzung löschen |
-| GET | `/wall` | Am Projekt-Port: Wall. Am Steuer-Port ohne Prefix: Umleitung auf das einzige laufende Public-Projekt oder Hinweisseite |
-| GET | `/upload` | Am Projekt-Port: Upload |
-| GET | `/admin` | Am Projekt-Port: Admin |
-| GET | `/p/{name}/wall` | Modus `public`: 302 auf `/{name}/wall`. Modus `network`: 404 |
+| GET | `/wall` | Ohne Prefix: Umleitung auf das einzige laufende Projekt (auf der öffentlichen Adresse nur Public) oder Hinweisseite |
+| GET | `/upload` | Entsprechend Upload |
+| GET | `/admin` | Entsprechend Admin |
+| GET | `/p/{name}/wall` | 302 auf `/{name}/wall` (Network auf öffentlicher Adresse: 404) |
 | GET | `/p/{name}/upload` | Entsprechend Upload |
 | GET | `/p/{name}/admin` | Entsprechend Admin |
 | GET | `/p/{name}/browser` | Entsprechend Medienbrowser |
-| GET | `/setup` | Erststart, Projekte, Protokoll |
+| GET | `/setup` | Erststart, Projekte, Server, Protokoll |
 | GET | `/login` | Anmeldung als Admin |
 | GET | `/logout` | Master-Session löschen |
 
@@ -208,15 +207,15 @@ Unter `/{name}/` gelten dieselben APIs und Dateipfade wie ohne Prefix: `/ws`, `/
 | GET | `/api/setup/logs/download` | Master, Datei |
 | POST | `/api/setup/update/check` | Master, Stand von `origin/main` |
 | POST | `/api/setup/update` | Master, fast-forward, pip, Neustart |
-| POST | `/api/runtime` | Master, Port, öffentliche Adresse, Log-Level |
+| POST | `/api/runtime` | Master, Serverport, öffentliche Adresse, Medienordner, Log-Level |
 | POST | `/api/projects` | Master, leeres Projekt anlegen |
 | POST | `/api/projects/import` | Master, ZIP oder `config.json`; neues Projekt |
 | GET | `/api/projects/{name}/export` | Master, ZIP nur Config und Hintergrund-/Header-Bilder |
 | POST | `/api/projects/{name}/start` | Master |
 | POST | `/api/projects/{name}/stop` | Master |
-| POST | `/api/projects/{name}/port` | Master |
+| DELETE | `/api/projects/{name}` | Master, Projektordner und Medien löschen |
 | POST | `/api/projects/{name}/network` | Master |
-| POST | `/api/projects/{name}/storage` | Master |
+| POST | `/api/projects/{name}/pin` | Master |
 | GET | `/api/admin/media` | PIN |
 | GET | `/api/header/list` | PIN |
 | POST | `/api/header/upload` | PIN |
@@ -236,14 +235,14 @@ Unter `/{name}/` gelten dieselben APIs und Dateipfade wie ohne Prefix: `/ws`, `/
 
 ## 9. Netzwerkmodi
 
-Feld `network_mode` in `projects/<name>/config.json`. Zulässig: `network`, `public`. Die Domain steht in `data/runtime.json` (`public_host`, `public_https`).
+Feld `network_mode` in `projects/<name>/config.json`. Zulässig: `network`, `public`. Die öffentliche Adresse steht in `data/runtime.json` (`public_host`, `public_https`; Eingabe mit `http://` oder `https://`).
 
-| Wert | Anzeige-URL (QR, Links) | Steuer-Port `/{name}` |
-|------|-------------------------|------------------------|
-| `network` | `http://<lokale-IPv4>:<projekt-port>` | existiert nicht (404) |
-| `public` | `https://<public_host>/{name}` bzw. `http://<public_host>/{name}` | ausliefern |
+| Wert | Anzeige-URL (QR, Links) | `/{name}` |
+|------|-------------------------|-----------|
+| `network` | `http://<lokale-IPv4>:<serverport>/{name}` | nur LAN-Host |
+| `public` | `https://<public_host>/{name}` bzw. `http://<public_host>/{name}` | LAN und öffentliche Adresse |
 
-Die Anwendung nimmt selbst nur HTTP entgegen. Der Schalter HTTPS ändert ausschließlich die ausgegebenen URLs. QR-Code Upload im Public-Modus: `https://<host>/{name}/upload`. Reverse-Proxy nur auf den Steuer-Port.
+Die Anwendung nimmt selbst nur HTTP entgegen. Das Schema der öffentlichen Adresse ändert ausschließlich die ausgegebenen URLs. QR-Code Upload im Public-Modus: `https://<host>/{name}/upload`. Reverse-Proxy nur auf den Serverport.
 
 Lokale IPv4: UDP zu `8.8.8.8`. Externe IP nur als Fallback, wenn Public ohne Host.
 
@@ -259,24 +258,24 @@ Cloudflare-Tunnel und `cloudflared` sind nicht mehr Bestandteil.
 
 Datei: `projects/<name>/config.json`. Fehlende Schlüssel werden aus Defaults ergänzt. Schreibzugriff auf die Wand-Config nur mit gültiger PIN-Sitzung. `POST /api/config` übernimmt `network_mode`, `public_host`, `public_https`, `public_base_url`, `storage_mode`, `storage_path` und `port` nicht; die setzt nur Setup (Master). `GET /api/config` liefert `storage_path` nicht.
 
-Export (`GET /api/projects/{name}/export`): ZIP mit `config.json` und Bildern aus `background/` sowie `header/`. Ohne `media/`, `derived/`, `hidden.json`, `access.json`. Import (`POST /api/projects/import`): legt ein neues Projekt an (neuer Port, neuer PIN). Übernimmt Wand-Schlüssel aus der Datei, nicht Setup-Schlüssel (Netzwerk, Speicher, Port). Optional Bilder aus `background/` und `header/` im ZIP. `config.json` darf im ZIP im Wurzelverzeichnis oder in einem Ordner liegen.
+Export (`GET /api/projects/{name}/export`): ZIP mit `config.json` und Bildern aus `background/` sowie `header/`. Ohne `media/`, `derived/`, `hidden.json`, `access.json`. Import (`POST /api/projects/import`): legt ein neues Projekt an (neuer PIN). Übernimmt Wand-Schlüssel aus der Datei, nicht Setup-Schlüssel (Netzwerk, Speicher, Port). Optional Bilder aus `background/` und `header/` im ZIP. `config.json` darf im ZIP im Wurzelverzeichnis oder in einem Ordner liegen.
 
 Bildtext der Gäste: Datei `media/<stem>.txt` neben dem Medium. Die Wall (Fly und Grid) lädt sie über `/media/<stem>.txt`, wenn `comments_enabled` gesetzt ist. Schriftart unter `/admin` als Auswahlliste.
 
 ### Medienspeicher
 
-`storage_mode`:
+Serverweit unter `/setup` (Reiter Server), Feld `media_root` in `runtime.json`.
 
-| Wert | Ort der Originale |
-|------|-------------------|
-| `project` | `projects/<name>/media` |
-| `folder` | Pfad in `storage_path` (lokal, UNC, Mount) |
+| `media_root` | Ort der Originale |
+|--------------|-------------------|
+| leer | `projects/<name>/media` |
+| gesetzt | `<media_root>/<name>` |
 
-Abgeleitete Dateien bleiben unter `projects/<name>/derived/`. Samba: Share als Ordner mounten oder UNC-Pfad. Nextcloud (WebDAV), FTP und SSH sind nicht als eigene Clients eingebaut.
+Abgeleitete Dateien bleiben unter `projects/<name>/derived/`. Samba: Share als Ordner mounten oder UNC-Pfad als `media_root`. Nextcloud (WebDAV), FTP und SSH sind nicht als eigene Clients eingebaut. Ältere `storage_mode`/`storage_path` je Projekt gelten nur, solange `media_root` leer ist.
 
 ### Medienbrowser
 
-Seite `/admin/browser`, PIN-Sitzung wie Admin. Übersicht, Mehrfachauswahl, Verstecken, Löschen, ZIP-Download aller Originale (`GET /api/admin/media/archive`, inkl. versteckter Dateien). Versteckte Dateien bleiben auf dem Speicher. `GET /api/images` listet sie nicht. Die Wall erhält den Dateinamen nicht per WebSocket (`__hide__:` entfernt bereits angezeigte Exemplare, ohne das Medium nachzuladen). Einblenden sendet den Namen wieder an die Wall. Liste der versteckten Originalnamen: `projects/<name>/hidden.json`. Sammelaktionen: `POST /api/admin/media/batch`. Einbinden eines fremden Gallery-Prozesses entfällt; ein Prozess, mehrere Listener.
+Seite `/admin/browser`, PIN-Sitzung wie Admin. Übersicht, Mehrfachauswahl, Verstecken, Löschen, ZIP-Download aller Originale (`GET /api/admin/media/archive`, inkl. versteckter Dateien). Versteckte Dateien bleiben auf dem Speicher. `GET /api/images` listet sie nicht. Die Wall erhält den Dateinamen nicht per WebSocket (`__hide__:` entfernt bereits angezeigte Exemplare, ohne das Medium nachzuladen). Einblenden sendet den Namen wieder an die Wall. Liste der versteckten Originalnamen: `projects/<name>/hidden.json`. Sammelaktionen: `POST /api/admin/media/batch`. Einbinden eines fremden Gallery-Prozesses entfällt; ein Prozess, ein Port.
 
 Transcoding-Schlüssel:
 

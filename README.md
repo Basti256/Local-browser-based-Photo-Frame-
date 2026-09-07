@@ -1,6 +1,6 @@
 # Local-browser-based-Photo-Frame
 
-**Version 2.17.1**
+**Version 2.18.0**
 
 Browserbasierter Foto-Rahmen: Gäste laden Bilder und Videos über eine Upload-Seite. Eine Wall zeigt die Medien in Echtzeit. Die Einrichtung liegt unter `/setup` (Konto **Admin**). Die Wand-Einstellungen unter `/admin` sind per Projekt-PIN geschützt.
 
@@ -59,11 +59,11 @@ Nach dem Start:
 - Erstkonfiguration: `http://127.0.0.1:8000/setup`
 - Anmeldung (Admin): `http://127.0.0.1:8000/login`
 
-Der Port 8000 ist der Einrichtungs-Port. Öffentlich (Reverse-Proxy auf diesen Port, nur Projekte im Modus Public): `https://frame.example.com/<projekt>/wall`. Im Modus Network existiert dieser Pfad nicht. Im LAN bleibt der Projekt-Port gültig, zum Beispiel `http://192.168.x.x:8001/wall`. Unter `/setup` Starten/Stoppen.
+Der Port 8000 ist der Serverport. Alle Projekte hängen daran, zum Beispiel `http://192.168.x.x:8000/<projekt>/wall`. Öffentlich (Reverse-Proxy auf denselben Port, nur Projekte im Modus Public): `https://frame.example.com/<projekt>/wall`. Im Modus Network existiert dieser Pfad auf der öffentlichen Adresse nicht. Unter `/setup` Starten/Stoppen.
 
-Beim Erststart setzt du das Admin-Passwort und den Einrichtungs-Port. Ändert sich der Port, startet der Server neu; die Seite wartet mit Timer und Link auf die neue Adresse. Ein Projekt ist optional und wird danach unter `/setup` angelegt. Passwort und Projekt-PINs werden als Argon2id-Hash gespeichert. `data/` und `projects/` entstehen lokal und gehören nicht ins Git.
+Beim Erststart setzt du das Admin-Passwort und den Serverport. Ändert sich der Port, startet der Server neu; die Seite wartet mit Timer und Link auf die neue Adresse. Ein Projekt ist optional und wird danach unter `/setup` angelegt. Passwort und Projekt-PINs werden als Argon2id-Hash gespeichert. `data/` und `projects/` entstehen lokal und gehören nicht ins Git.
 
-Je Projekt: Modus **Network** (nur LAN-IP und Projekt-Port; die öffentliche Domain kennt das Projekt nicht) oder **Public** (Server-Domain unter `/setup`, Pfad `/{projekt}`). Links unter Einrichtung zwischen lokal und öffentlich umschalten.
+Je Projekt: Modus **Network** (nur LAN unter `/{projekt}`; die öffentliche Domain kennt das Projekt nicht) oder **Public** (öffentliche Adresse unter `/setup` mit `https://` oder `http://`, Pfad `/{projekt}`). Bei Public-Projekten die Links lokal/öffentlich umschalten.
 
 Dauerbetrieb unter systemd: `deploy/photo-frame.service`. Details in `TECHNICAL.md`.
 
@@ -99,8 +99,8 @@ Danach den Server neu starten (`./start.sh` / `start.bat`, oder `sudo systemctl 
 
 ## Funktionen
 
-- Projekte mit eigener Config, Medien, PIN, eigenem LAN-Port; öffentlich unter `/{name}/` am Steuer-Port; Start/Stop unter `/setup`; Config als ZIP laden/exportieren (`config.json` und Hintergründe)
-- Medienspeicher im Projektordner oder in einem Ordner/Netzlaufwerk
+- Projekte mit eigener Config, Medien, PIN; unter `/{name}/` am Serverport; Start/Stop und Löschen unter `/setup`; Config als ZIP laden/exportieren (`config.json` und Hintergründe)
+- Medienspeicher serverweit (Ordner mit Unterverzeichnis je Projekt) oder im jeweiligen Projektordner
 - QR-Code zur Upload-Seite gemäß Projekt-Netzwerkmodus
 - PIN-geschützter Medienbrowser: Mehrfachauswahl, Verstecken, Löschen, ZIP-Download
 - Wall: Fly-Modus und Grid-Modus; Admin mit Reitern, vorherige Ansicht unter `/admin/classic`; Fly-Spawn Bahnen, Burst oder Zufall

@@ -4,6 +4,24 @@ Alle wesentlichen Änderungen am Local-browser-based-Photo-Frame werden in diese
 
 ---
 
+## [2.18.0] – 2026-09-07
+
+### Neu
+
+- Projekte unter `/setup` löschen (Rückfrage, dann sofort).
+- Einrichtung: Reiter Projekte (Startseite), Server, Protokoll.
+
+### Geändert
+
+- Ein Serverport für alles. Keine eigenen Projekt-Ports. Pfade immer `/{name}/wall` usw.
+- Network-Projekte nur über die LAN-Adresse; auf der öffentlichen Adresse 404.
+- Öffentliche Adresse mit `https://` oder `http://`. Kein HTTPS-Häkchen.
+- Medienordner gilt serverweit (Unterordner je Projekt), unter Server.
+- Lokal/Öffentlich-Umschalter nur noch auf Public-Projektkarten, Standard öffentlich.
+- Texte: Serverport statt Einrichtungs-Port. Kein Konto-Admin, kein Bind in der Kopfzeile.
+
+---
+
 ## [2.17.1] – 2026-09-07
 
 ### Behoben

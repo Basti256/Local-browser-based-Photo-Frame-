@@ -23,6 +23,7 @@ DEFAULT_RUNTIME = {
     "public_host": "",
     "public_https": False,
     "log_level": "INFO",
+    "media_root": "",
 }
 
 
@@ -69,6 +70,7 @@ def load_runtime() -> dict[str, Any]:
         level = "INFO"
         changed = True
     data["log_level"] = level
+    data["media_root"] = str(data.get("media_root") or "").strip()
     if changed:
         save_runtime(data)
     return {
@@ -79,6 +81,7 @@ def load_runtime() -> dict[str, Any]:
         "public_host": data["public_host"],
         "public_https": data["public_https"],
         "log_level": data["log_level"],
+        "media_root": data["media_root"],
     }
 
 
@@ -96,6 +99,7 @@ def save_runtime(data: dict[str, Any]) -> None:
         "public_host": str(data.get("public_host") or "").strip(),
         "public_https": bool(data.get("public_https")),
         "log_level": str(data.get("log_level") or "INFO").upper(),
+        "media_root": str(data.get("media_root") or "").strip(),
     }
     if payload["bind_host"] not in ("0.0.0.0", "127.0.0.1"):
         payload["bind_host"] = "0.0.0.0"

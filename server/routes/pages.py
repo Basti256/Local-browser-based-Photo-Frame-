@@ -149,26 +149,33 @@ def _project_html_gate(request: Request):
 
 
 def _redirect_single_or_none(request: Request, dest: str):
-    from server.network import normalize_mode
+    from server.network import is_public_http_host, normalize_mode
     from server.project import ProjectPaths, load_project_config
-    running = [
-        name for name in runner.running_names()
-        if normalize_mode(load_project_config(ProjectPaths(name)).get("network_mode")) == "public"
-    ]
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or ""
+    public = is_public_http_host(host)
+    running = []
+    for name in runner.running_names():
+        mode = normalize_mode(load_project_config(ProjectPaths(name)).get("network_mode"))
+        if public and mode != "public":
+            continue
+        running.append(name)
     if len(running) == 1:
         return RedirectResponse(f"/{running[0]}{dest}", status_code=302)
     return _no_project()
 
 
-def _legacy_project_redirect(name: str, dest: str):
-    from server.network import normalize_mode
+def _legacy_project_redirect(name: str, dest: str, request: Request | None = None):
+    from server.network import is_public_http_host, normalize_mode
     from server.project import ProjectPaths, find_project_by_slug, load_project_config
     found = find_project_by_slug(name)
     if not found:
         return _no_project()
     name = found
     cfg = load_project_config(ProjectPaths(name))
-    if normalize_mode(cfg.get("network_mode")) != "public":
+    host = ""
+    if request is not None:
+        host = request.headers.get("x-forwarded-host") or request.headers.get("host") or ""
+    if normalize_mode(cfg.get("network_mode")) != "public" and is_public_http_host(host):
         return HTMLResponse("Not Found", status_code=404)
     if not runner.is_running(name):
         return _stopped()
@@ -178,38 +185,38 @@ def _legacy_project_redirect(name: str, dest: str):
 
 
 @router.get("/p/{name}/wall")
-def project_wall(name: str):
-    return _legacy_project_redirect(name, "/wall")
+def project_wall(name: str, request: Request):
+    return _legacy_project_redirect(name, "/wall", request)
 
 
 @router.get("/p/{name}/upload")
-def project_upload(name: str):
-    return _legacy_project_redirect(name, "/upload")
+def project_upload(name: str, request: Request):
+    return _legacy_project_redirect(name, "/upload", request)
 
 
 @router.get("/p/{name}/admin")
-def project_admin(name: str):
-    return _legacy_project_redirect(name, "/admin")
+def project_admin(name: str, request: Request):
+    return _legacy_project_redirect(name, "/admin", request)
 
 
 @router.get("/p/{name}/browser")
-def project_browser(name: str):
-    return _legacy_project_redirect(name, "/admin/browser")
+def project_browser(name: str, request: Request):
+    return _legacy_project_redirect(name, "/admin/browser", request)
 
 
 @router.get("/p/{name}")
-def project_legacy_root(name: str):
-    return _legacy_project_redirect(name, "/wall")
+def project_legacy_root(name: str, request: Request):
+    return _legacy_project_redirect(name, "/wall", request)
 
 
 @router.get("/p/{name}/{rest:path}")
-def project_legacy_rest(name: str, rest: str):
+def project_legacy_rest(name: str, rest: str, request: Request):
     dest = "/" + rest.lstrip("/") if rest else "/wall"
     if dest == "/browser" or dest.startswith("/browser/"):
         dest = "/admin" + dest[len("/browser"):] if dest != "/browser" else "/admin/browser"
         if dest == "/admin":
             dest = "/admin/browser"
-    return _legacy_project_redirect(name, dest)
+    return _legacy_project_redirect(name, dest, request)
 
 
 @router.get("/wall")

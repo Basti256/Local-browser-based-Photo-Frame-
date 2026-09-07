@@ -1,4 +1,4 @@
-"""Einrichtung: Master-Konto, Projekte, je Projekt Netzwerk und PIN."""
+"""Einrichtung: Master-Konto, Projekte, Server, Protokoll."""
 from __future__ import annotations
 
 import io
@@ -13,15 +13,17 @@ from pydantic import BaseModel
 
 from server.applog import clear_log, current_level_name, log, log_path, read_log
 from server.auth import SETUP_USERNAME, create_user, has_user, set_session
-from server.defaults import NETWORK_MODES, STORAGE_MODES
+from server.defaults import NETWORK_MODES
 from server.deps import require_user
 from server.lockout import clear_failures, record_failure, refuse_if_locked, status as lock_status
 from server.network import (
     advertised_base_url,
     get_network_info,
     lan_base_url,
+    migrate_media_root,
     migrate_server_public_host,
     normalize_mode,
+    parse_public_address,
     public_base_url,
     public_origin,
     sanitize_public_host,
@@ -31,14 +33,13 @@ from server.project import (
     IMAGE_EXT,
     ProjectPaths,
     apply_imported_config,
-    apply_listen_port,
-    apply_storage,
+    apply_media_root,
     create_project,
+    delete_project,
     list_projects,
     load_project_config,
-    project_listen_port,
+    port_in_use,
     save_project_config,
-    used_project_ports,
     validate_project_name,
     write_imported_asset,
 )
@@ -68,6 +69,7 @@ class RuntimeBody(BaseModel):
     public_host: str | None = None
     public_https: bool | None = None
     log_level: str | None = None
+    media_root: str | None = None
 
 
 class ProjectNetworkBody(BaseModel):
@@ -78,15 +80,6 @@ class ProjectNetworkBody(BaseModel):
 
 class ProjectPinBody(BaseModel):
     pin: str
-
-
-class ProjectPortBody(BaseModel):
-    port: int
-
-
-class ProjectStorageBody(BaseModel):
-    storage_mode: str
-    storage_path: str = ""
 
 
 def _apply_network(paths: ProjectPaths, mode: str) -> dict:
@@ -160,6 +153,7 @@ def setup_init(body: InitBody, request: Request):
 @router.get("/api/setup/state")
 def setup_state(_user: str = Depends(require_user)):
     migrate_server_public_host()
+    migrate_media_root()
     rt = load_runtime()
     names = list_projects()
     projects = []
@@ -177,13 +171,10 @@ def setup_state(_user: str = Depends(require_user)):
             "running": runner.is_running(name),
             "active": runner.is_running(name),
             "media_count": media_count,
-            "port": project_listen_port(p, cfg),
             "network_mode": mode,
-            "storage_mode": cfg.get("storage_mode") or "project",
-            "storage_path": cfg.get("storage_path") or "",
             "has_pin": has_pin(p),
             "pin": ensure_project_pin(p),
-            "local_url": lan_base_url(cfg),
+            "local_url": lan_base_url(name),
             "public_url": public_base_url(name) if mode == "public" else "",
             "base_url": advertised_base_url(cfg, name=name),
             "pin_lock": {
@@ -201,7 +192,7 @@ def setup_state(_user: str = Depends(require_user)):
         "projects": projects,
         "ffmpeg": ffmpeg_bin() is not None,
         "modes": list(NETWORK_MODES),
-        "storage_modes": list(STORAGE_MODES),
+        "media_root": str(rt.get("media_root") or ""),
         "locks": {
             "setup": setup_lock,
             "projects": [
@@ -221,7 +212,6 @@ def api_create_project(body: ProjectBody, _user: str = Depends(require_user)):
         "ok": True,
         "name": paths.name,
         "pin": ensure_project_pin(paths),
-        "port": project_listen_port(paths),
         "running": False,
     }
 
@@ -236,21 +226,18 @@ async def api_stop_project(name: str, _user: str = Depends(require_user)):
     return await runner.stop(name)
 
 
+@router.delete("/api/projects/{name}")
+async def api_delete_project(name: str, _user: str = Depends(require_user)):
+    name = validate_project_name(name)
+    await runner.stop(name)
+    delete_project(name)
+    log("INFO", f"Projekt gelöscht {name}")
+    return {"ok": True, "name": name}
+
+
 @router.post("/api/projects/{name}/activate")
 async def api_activate_project(name: str, _user: str = Depends(require_user)):
     return await runner.start(name)
-
-
-@router.post("/api/projects/{name}/port")
-def api_project_port(name: str, body: ProjectPortBody, _user: str = Depends(require_user)):
-    name = validate_project_name(name)
-    paths = ProjectPaths(name)
-    if not paths.config_file.is_file():
-        raise HTTPException(status_code=404, detail="Projekt nicht gefunden.")
-    if runner.is_running(name):
-        raise HTTPException(status_code=409, detail="Projekt zuerst stoppen.")
-    cfg = apply_listen_port(paths, body.port)
-    return {"ok": True, "port": cfg["port"]}
 
 
 @router.post("/api/projects/{name}/network")
@@ -268,7 +255,7 @@ def api_project_network(name: str, body: ProjectNetworkBody, _user: str = Depend
         "public_https": cfg["public_https"],
         "base_url": advertised_base_url(cfg, name=name),
         "public_url": public_base_url(name) if cfg["network_mode"] == "public" else "",
-        "local_url": lan_base_url(cfg),
+        "local_url": lan_base_url(name),
     }
 
 
@@ -280,21 +267,6 @@ def api_project_pin(name: str, body: ProjectPinBody, _user: str = Depends(requir
         raise HTTPException(status_code=404, detail="Projekt nicht gefunden.")
     set_pin(paths, body.pin)
     return {"ok": True, "has_pin": True, "pin": ensure_project_pin(paths)}
-
-
-@router.post("/api/projects/{name}/storage")
-def api_project_storage(name: str, body: ProjectStorageBody, _user: str = Depends(require_user)):
-    name = validate_project_name(name)
-    paths = ProjectPaths(name)
-    if not paths.config_file.is_file():
-        raise HTTPException(status_code=404, detail="Projekt nicht gefunden.")
-    cfg = apply_storage(paths, body.storage_mode, body.storage_path)
-    return {
-        "ok": True,
-        "storage_mode": cfg["storage_mode"],
-        "storage_path": cfg.get("storage_path") or "",
-        "media_path": str(paths.media),
-    }
 
 
 _IMPORT_MAX = 25 * 1024 * 1024
@@ -391,7 +363,6 @@ async def api_import_project(
         "ok": True,
         "name": paths.name,
         "pin": ensure_project_pin(paths),
-        "port": project_listen_port(paths),
         "running": False,
     }
 
@@ -437,14 +408,18 @@ def api_runtime(
             kwargs["port"] = parse_port(body.port)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
-        if kwargs["port"] != old_port and kwargs["port"] in used_project_ports():
-            raise HTTPException(status_code=409, detail="Port ist einem Projekt zugeordnet.")
+        if kwargs["port"] != old_port and port_in_use(kwargs["port"]):
+            raise HTTPException(status_code=409, detail="Port ist belegt.")
     if body.bind_host is not None:
         kwargs["bind_host"] = body.bind_host
     if body.public_host is not None:
-        kwargs["public_host"] = sanitize_public_host(body.public_host)
-    if body.public_https is not None:
+        host, https = parse_public_address(body.public_host)
+        kwargs["public_host"] = host
+        kwargs["public_https"] = https if host else False
+    elif body.public_https is not None:
         kwargs["public_https"] = bool(body.public_https)
+    if body.media_root is not None:
+        apply_media_root(body.media_root)
     if body.log_level is not None:
         level = str(body.log_level).upper()
         if level not in ("DEBUG", "INFO", "WARNING", "ERROR"):

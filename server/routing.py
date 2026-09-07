@@ -1,4 +1,4 @@
-"""Projekt-Pfade am Steuer-Port: /{slug}/wall ohne Redirect auf den Projekt-Port."""
+"""Projekt-Pfade am Serverport: /{slug}/wall ohne extra TCP-Ports."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -37,7 +37,21 @@ def split_segment(path: str) -> tuple[str, str]:
     return first, remainder
 
 
-def resolve_control_path(path: str, running: set[str] | None = None) -> PrefixResult:
+def _scope_host(scope: Scope) -> str:
+    headers = scope.get("headers") or []
+    forwarded = ""
+    host = ""
+    for key, value in headers:
+        name = key.decode("latin-1").lower() if isinstance(key, (bytes, bytearray)) else str(key).lower()
+        text = value.decode("latin-1") if isinstance(value, (bytes, bytearray)) else str(value)
+        if name == "x-forwarded-host" and not forwarded:
+            forwarded = text.split(",")[0].strip()
+        elif name == "host" and not host:
+            host = text.split(",")[0].strip()
+    return forwarded or host
+
+
+def resolve_control_path(path: str, running: set[str] | None = None, http_host: str = "") -> PrefixResult:
     first, remainder = split_segment(path)
     if not first or is_reserved_segment(first):
         return PrefixResult(path=path, project=None, prefix="", status=None)
@@ -52,10 +66,10 @@ def resolve_control_path(path: str, running: set[str] | None = None) -> PrefixRe
                 status=STATUS_MISSING,
             )
         return PrefixResult(path=path, project=None, prefix="", status=None)
-    from server.network import normalize_mode
+    from server.network import is_public_http_host, normalize_mode
     from server.project import ProjectPaths, load_project_config
     cfg = load_project_config(ProjectPaths(name))
-    if normalize_mode(cfg.get("network_mode")) != "public":
+    if normalize_mode(cfg.get("network_mode")) != "public" and is_public_http_host(http_host):
         return PrefixResult(path=path, project=None, prefix="", status=None)
     prefix = "/" + name
     redirect = None
@@ -115,7 +129,7 @@ def bind_project_scope(scope: Scope) -> Scope:
         state["redirect"] = None
         scope["state"] = state
         return scope
-    result = resolve_control_path(path)
+    result = resolve_control_path(path, http_host=_scope_host(scope))
     if result.redirect:
         state["redirect"] = result.redirect
         state["project_name"] = result.project
@@ -147,7 +161,7 @@ async def _send_redirect(send: Send, location: str) -> None:
 
 
 class ProjectPrefixASGI:
-    """Schreibt /{slug}/… am Steuer-Port auf die bestehenden Routen um."""
+    """Schreibt /{slug}/… am Serverport auf die bestehenden Routen um."""
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
@@ -194,5 +208,5 @@ def setup_redirect_response(request, send_status: int = 302):
     from server.restart import listen_port
     path = request.url.path
     if path.startswith("/api/"):
-        return JSONResponse({"detail": "Nur auf dem Einrichtungs-Port."}, status_code=404)
+        return JSONResponse({"detail": "Nur auf dem Serverport."}, status_code=404)
     return RedirectResponse(setup_url_for_port(request, listen_port()), status_code=send_status)

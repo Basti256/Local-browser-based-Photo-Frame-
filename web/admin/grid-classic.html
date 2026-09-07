@@ -305,7 +305,7 @@ let res=await fetch("/api/config")
 let cfg=await res.json()
 let mode=cfg.network_mode
 let txt=""
-if(mode==="network") txt="LAN: QR und Links nutzen die lokale IP und den Port, HTTP."
+if(mode==="network") txt="LAN: QR und Links nutzen die lokale IP, den Serverport und /Projektname."
 if(mode==="public") txt="Public: Domain oder öffentliche Adresse, siehe Einrichtung."+(cfg.public_https?" HTTPS (Reverse-Proxy).":"")+(cfg.public_host?" Host: "+cfg.public_host:"")
 document.getElementById("network_details").innerHTML=txt
 }

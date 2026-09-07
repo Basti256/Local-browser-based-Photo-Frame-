@@ -16,7 +16,7 @@
 <input id="password" type="password" required minlength="10" autocomplete="new-password">
 <label for="password2">Passwort wiederholen</label>
 <input id="password2" type="password" required minlength="10" autocomplete="new-password">
-<label for="initport">Listen-Port für diesen Server</label>
+<label for="initport">Serverport</label>
 <input id="initport" type="number" min="1" max="65535" value="8000" required>
 <p class="muted">Wenn du den Port änderst, startet der Server neu. Die Seite wartet dann auf die neue Adresse.</p>
 <div class="error" id="initerr" hidden></div>
@@ -30,42 +30,18 @@
 <a href="/logout">Abmelden</a>
 </nav>
 <h1>Einrichtung <span class="muted" id="ver"></span></h1>
-<p>Konto: <strong id="who"></strong>. Laufende Projekte: <strong id="active"></strong></p>
+<p>Laufende Projekte: <strong id="active"></strong></p>
 <p class="muted" id="netinfo"></p>
 <p class="muted" id="sys"></p>
-<p class="muted">ffmpeg: <span id="ffmpeg"></span></p>
 <div class="warn" id="lockbox" hidden></div>
 
 <div class="tabs">
 <button type="button" id="tabProjectsBtn" class="active">Projekte</button>
+<button type="button" id="tabServerBtn">Server</button>
 <button type="button" id="tabLogsBtn">Protokoll</button>
 </div>
 
 <div id="tabProjects">
-<h2>Server</h2>
-<label for="port">Einrichtungs-Port</label>
-<input id="port" type="number" min="1" max="65535">
-<button type="button" id="savePort">Port speichern</button>
-<label for="pubhost">Öffentliche Adresse (Domain oder IP)</label>
-<input id="pubhost" placeholder="frame.example.org">
-<label class="row">
-<input type="checkbox" id="pubhttps">
-HTTPS (Reverse-Proxy, Anzeige-URLs ohne App-Port)
-</label>
-<p class="muted">Gilt für alle Projekte im Modus Public. Der Projektname ist der Pfad, z. B. https://frame.example.org/hochzeit/upload</p>
-<button type="button" id="savePublic">Öffentliche Adresse speichern</button>
-<h2>Update</h2>
-<p class="muted" id="updateinfo">Prüfung und Einspielen nutzen origin/main (fast-forward). data/ und projects/ bleiben unverändert.</p>
-<div class="error" id="updateerr" hidden></div>
-<button type="button" id="checkUpdate">Auf Updates prüfen</button>
-<button type="button" id="doUpdate" class="secondary">Aktualisieren</button>
-
-<h2>Projekte</h2>
-<div class="switch">
-<span class="muted">Links:</span>
-<button type="button" id="linksLocal">Lokal</button>
-<button type="button" id="linksPublic">Öffentlich</button>
-</div>
 <div id="plist"></div>
 <label for="newproj">Neues Projekt</label>
 <input id="newproj" placeholder="Name">
@@ -75,9 +51,29 @@ HTTPS (Reverse-Proxy, Anzeige-URLs ohne App-Port)
 <div class="error" id="err" hidden></div>
 </div>
 
-<div id="tabLogs" hidden>
+<div id="tabServer" hidden>
+<h2>Server</h2>
+<label for="port">Serverport</label>
+<input id="port" type="number" min="1" max="65535">
+<button type="button" id="savePort">Port speichern</button>
+<label for="pubhost">Öffentliche Adresse</label>
+<input id="pubhost" placeholder="https://frame.example.org" autocomplete="off">
+<p class="muted">Mit Schema, z. B. https://frame.example.org oder http://frame.example.org. Gilt für alle Projekte im Modus Public. Der Projektname ist der Pfad, z. B. https://frame.example.org/hochzeit/upload</p>
+<button type="button" id="savePublic">Öffentliche Adresse speichern</button>
+<label for="mediaroot">Medienordner (Photo-Browser)</label>
+<input id="mediaroot" placeholder="leer = projects/&lt;name&gt;/media">
+<p class="muted">Ein Ordner für alle Projekte. Jedes Projekt liegt darunter in einem Unterordner mit dem Projektnamen. Leer lassen: Medien bleiben im jeweiligen Projektordner.</p>
+<button type="button" id="saveMedia">Medienordner speichern</button>
+<p class="muted">ffmpeg: <span id="ffmpeg"></span></p>
+<div class="error" id="servererr" hidden></div>
+
+<h2>Update</h2>
+<p class="muted" id="updateinfo">Prüfung und Einspielen nutzen origin/main (fast-forward). data/ und projects/ bleiben unverändert.</p>
+<div class="error" id="updateerr" hidden></div>
+<button type="button" id="checkUpdate">Auf Updates prüfen</button>
+<button type="button" id="doUpdate" class="secondary">Aktualisieren</button>
+
 <h2>Protokoll</h2>
-<p class="muted">Die letzten 72 Stunden. Keine Passwörter oder PINs.</p>
 <label for="loglevel">Log-Level</label>
 <select id="loglevel">
 <option>DEBUG</option>
@@ -86,6 +82,12 @@ HTTPS (Reverse-Proxy, Anzeige-URLs ohne App-Port)
 <option>ERROR</option>
 </select>
 <button type="button" id="saveLevel">Level speichern</button>
+<div class="error" id="loglevelerr" hidden></div>
+</div>
+
+<div id="tabLogs" hidden>
+<h2>Protokoll</h2>
+<p class="muted">Die letzten 72 Stunden. Keine Passwörter oder PINs.</p>
 <button type="button" id="refreshLogs" class="secondary">Aktualisieren</button>
 <button type="button" id="downloadLogs" class="secondary">Herunterladen</button>
 <button type="button" id="clearLogs" class="danger">Leeren</button>
@@ -96,14 +98,13 @@ HTTPS (Reverse-Proxy, Anzeige-URLs ohne App-Port)
 
 <div id="restart" class="card" hidden>
 <h1>Server startet neu</h1>
-<p>Der Listen-Port wurde geändert. Die Einrichtungsseite wird unter der neuen Adresse geöffnet, sobald der Server erreichbar ist.</p>
+<p>Der Serverport wurde geändert. Die Einrichtungsseite wird unter der neuen Adresse geöffnet, sobald der Server erreichbar ist.</p>
 <p class="muted" id="restarttimer">Nächster Versuch in 10 s</p>
 <p id="restartfail" class="muted" hidden>Die neue Adresse ist noch nicht erreichbar. Es wird weiter versucht.</p>
 <p><a id="restartlink" class="btn" href="#">Jetzt öffnen</a></p>
 </div>
 </div>
 <script>
-let linkMode = localStorage.getItem("pfSetupLinkMode") || "public";
 let waitTimer = null;
 function showErr(id, msg){
   const el = document.getElementById(id);
@@ -195,9 +196,13 @@ function beginPortWait(setupUrl, waitSec){
 function esc(s){
   return String(s || "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
 }
+function cardLinkMode(name, networkMode){
+  if (networkMode !== "public") return "local";
+  return localStorage.getItem("pfLinkMode:" + name) || "public";
+}
 function projectLinks(p){
   const publicOk = p.network_mode === "public" && p.public_url;
-  const usePublic = linkMode === "public" && publicOk;
+  const usePublic = cardLinkMode(p.name, p.network_mode) === "public" && publicOk;
   const base = usePublic ? p.public_url : p.local_url;
   if (!base) {
     return `<p class="muted">Wall, Upload und Admin: zuerst starten oder die öffentliche Adresse eintragen.</p>`;
@@ -211,62 +216,53 @@ function projectLinks(p){
   </p>`;
 }
 function projectCard(p){
-  const folderStyle = p.storage_mode === "folder" ? "" : "display:none";
   const enc = encodeURIComponent(p.name);
   const status = p.running ? "läuft" : "gestoppt";
   const pinLock = p.pin_lock && p.pin_lock.locked
     ? `<p class="warn">Login unter ${esc(p.pin_lock.path)} gesperrt für ${Math.ceil(p.pin_lock.wait_seconds)} s (zu viele Fehlversuche).</p>`
     : "";
   const publicLine = p.network_mode === "public"
-    ? `<p class="muted">Öffentliche URL: ${p.public_url ? esc(p.public_url) : "— zuerst die Server-Adresse oben eintragen"}</p>`
+    ? `<p class="muted">Öffentliche URL: ${p.public_url ? esc(p.public_url) : "— zuerst die Server-Adresse unter Server eintragen"}</p>`
     : `<p class="muted">Keine öffentliche Adresse (Modus Network, nur LAN).</p>`;
-  return `<div class="card" style="margin:12px 0;padding:16px;" data-name="${esc(p.name)}">
-    <p><strong>${esc(p.name)}</strong> · ${status} · Port ${p.port} · ${p.media_count} Medien</p>
+  const linkSwitch = p.network_mode === "public"
+    ? `<div class="switch">
+        <span class="muted">Links:</span>
+        <button type="button" class="linksLocal">Lokal</button>
+        <button type="button" class="linksPublic">Öffentlich</button>
+      </div>`
+    : "";
+  return `<div class="card" style="margin:12px 0;padding:16px;" data-name="${esc(p.name)}" data-mode="${esc(p.network_mode)}">
+    <p><strong>${esc(p.name)}</strong> · ${status} · ${p.media_count} Medien</p>
     <p>Admin-PIN: <strong style="letter-spacing:0.18em;font-size:1.25rem">${p.pin ? esc(p.pin) : (p.has_pin ? "gesetzt, nicht anzeigbar" : "fehlt")}</strong></p>
     ${pinLock}
+    ${linkSwitch}
     ${projectLinks(p)}
     <p class="muted">LAN: ${esc(p.local_url)}</p>
     ${publicLine}
     ${p.running
       ? '<button type="button" class="danger stop">Stoppen</button>'
       : '<button type="button" class="start">Starten</button>'}
-    <label>Projekt-Port</label>
-    <input class="pport" type="number" min="1" max="65535" value="${p.port}" ${p.running ? "disabled" : ""}>
-    <button type="button" class="savePortProj" ${p.running ? "disabled" : ""}>Port speichern</button>
     <label>Modus</label>
     <select class="pmode">
-      <option value="network" ${p.network_mode==="network"?"selected":""}>Network (nur LAN-Port, keine öffentliche URL)</option>
+      <option value="network" ${p.network_mode==="network"?"selected":""}>Network (nur LAN, keine öffentliche URL)</option>
       <option value="public" ${p.network_mode==="public"?"selected":""}>Public (Server-Adresse plus /${esc(p.name)})</option>
     </select>
     <button type="button" class="saveNet">Netzwerk speichern</button>
-    <label>Medienspeicher</label>
-    <select class="pstore">
-      <option value="project" ${p.storage_mode!=="folder"?"selected":""}>Im Projektordner</option>
-      <option value="folder" ${p.storage_mode==="folder"?"selected":""}>Ordner / Netzlaufwerk (UNC oder Mount)</option>
-    </select>
-    <div class="pfolder" style="${folderStyle}">
-      <label>Pfad</label>
-      <input class="ppath" value="${esc(p.storage_path || "")}" placeholder="Z:\\\\Event oder \\\\nas\\share\\event oder /mnt/nas/event">
-      <p class="muted">Samba: Share mounten oder UNC-Pfad. Nextcloud über WebDAV folgt als eigener Modus.</p>
-    </div>
-    <button type="button" class="saveStore">Speicher speichern</button>
     <label>Admin-PIN setzen (4–10 Ziffern)</label>
     <input class="ppin" inputmode="numeric" minlength="4" maxlength="10" placeholder="${p.has_pin ? "neuen PIN setzen" : "PIN festlegen"}">
     <button type="button" class="savePin">PIN speichern</button>
     <a class="btn secondary" href="/api/projects/${enc}/export">Export</a>
+    <button type="button" class="danger deleteProj">Projekt löschen</button>
   </div>`;
 }
-function paintLinkSwitch(){
-  document.getElementById("linksLocal").classList.toggle("active", linkMode === "local");
-  document.getElementById("linksPublic").classList.toggle("active", linkMode === "public");
-}
 function showTab(which){
-  const proj = which === "projects";
-  document.getElementById("tabProjects").hidden = !proj;
-  document.getElementById("tabLogs").hidden = proj;
-  document.getElementById("tabProjectsBtn").classList.toggle("active", proj);
-  document.getElementById("tabLogsBtn").classList.toggle("active", !proj);
-  if (!proj) loadLogs();
+  document.getElementById("tabProjects").hidden = which !== "projects";
+  document.getElementById("tabServer").hidden = which !== "server";
+  document.getElementById("tabLogs").hidden = which !== "logs";
+  document.getElementById("tabProjectsBtn").classList.toggle("active", which === "projects");
+  document.getElementById("tabServerBtn").classList.toggle("active", which === "server");
+  document.getElementById("tabLogsBtn").classList.toggle("active", which === "logs");
+  if (which === "logs") loadLogs();
 }
 function lockHtml(locks){
   const bits = [];
@@ -283,7 +279,6 @@ async function loadLogs(){
   if (res.status === 401) { location.href = "/login?next=/setup"; return; }
   const d = await res.json().catch(() => ({}));
   document.getElementById("logtext").textContent = d.text || "";
-  if (d.level) document.getElementById("loglevel").value = d.level;
 }
 async function loadMain(){
   const res = await fetch("/api/setup/state");
@@ -292,17 +287,16 @@ async function loadMain(){
   const s = await res.json();
   document.getElementById("main").hidden = false;
   document.getElementById("ver").textContent = "v" + s.version;
-  document.getElementById("who").textContent = s.username;
   document.getElementById("active").textContent = (s.running_projects || []).join(", ") || "–";
   document.getElementById("port").value = s.runtime.port;
-  document.getElementById("pubhost").value = s.runtime.public_host || "";
-  document.getElementById("pubhttps").checked = !!s.runtime.public_https;
+  document.getElementById("pubhost").value = s.public_origin || "";
+  document.getElementById("mediaroot").value = s.media_root || "";
   if (s.log_level) document.getElementById("loglevel").value = s.log_level;
   const n = s.network || {};
-  document.getElementById("netinfo").textContent =
-    "Einrichtung Bind: " + (n.bind_host || "") + ":" + (s.runtime.port || "") +
-    (n.local_ip ? " · LAN-IP " + n.local_ip : "") +
-    (n.public_origin ? " · Öffentlich " + n.public_origin : "");
+  const bits = [];
+  if (n.local_ip) bits.push("LAN-IP " + n.local_ip);
+  if (n.public_origin) bits.push("Öffentlich " + n.public_origin);
+  document.getElementById("netinfo").textContent = bits.join(" · ");
   document.getElementById("ffmpeg").textContent = s.ffmpeg ? "gefunden" : "nicht installiert (Videos bleiben Original)";
   const lockbox = document.getElementById("lockbox");
   const lockText = lockHtml(s.locks);
@@ -310,12 +304,24 @@ async function loadMain(){
   lockbox.hidden = !lockText;
   const list = document.getElementById("plist");
   list.innerHTML = s.projects.map(projectCard).join("") || "<p class='muted'>Keine Projekte</p>";
-  paintLinkSwitch();
   list.querySelectorAll("[data-name]").forEach(card => {
     const name = card.getAttribute("data-name");
-    const storeEl = card.querySelector(".pstore");
-    const folder = card.querySelector(".pfolder");
-    storeEl.onchange = () => { folder.style.display = storeEl.value === "folder" ? "block" : "none"; };
+    const mode = card.getAttribute("data-mode");
+    const loc = card.querySelector(".linksLocal");
+    const pub = card.querySelector(".linksPublic");
+    if (loc && pub) {
+      const current = cardLinkMode(name, mode);
+      loc.classList.toggle("active", current === "local");
+      pub.classList.toggle("active", current === "public");
+      loc.onclick = () => {
+        localStorage.setItem("pfLinkMode:" + name, "local");
+        loadMain();
+      };
+      pub.onclick = () => {
+        localStorage.setItem("pfLinkMode:" + name, "public");
+        loadMain();
+      };
+    }
     card.querySelector(".saveNet").onclick = async () => {
       const res = await fetch("/api/projects/" + encodeURIComponent(name) + "/network", {
         method: "POST",
@@ -323,19 +329,6 @@ async function loadMain(){
         body: JSON.stringify({network_mode: card.querySelector(".pmode").value})
       });
       if (!res.ok) { const d = await res.json().catch(()=>({})); showErr("err", detailMsg(d) || "Netzwerk speichern fehlgeschlagen"); return; }
-      loadMain();
-    };
-    card.querySelector(".saveStore").onclick = async () => {
-      const res = await fetch("/api/projects/" + encodeURIComponent(name) + "/storage", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({
-          storage_mode: storeEl.value,
-          storage_path: card.querySelector(".ppath").value
-        })
-      });
-      const d = await res.json().catch(()=>({}));
-      if (!res.ok) { showErr("err", detailMsg(d) || "Speicher speichern fehlgeschlagen"); return; }
       loadMain();
     };
     card.querySelector(".savePin").onclick = async () => {
@@ -364,15 +357,12 @@ async function loadMain(){
       if (!res.ok) { showErr("err", detailMsg(d) || "Stop fehlgeschlagen"); return; }
       loadMain();
     };
-    const savePortProj = card.querySelector(".savePortProj");
-    if (savePortProj) savePortProj.onclick = async () => {
-      const res = await fetch("/api/projects/" + encodeURIComponent(name) + "/port", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({port: parseInt(card.querySelector(".pport").value, 10)})
-      });
+    card.querySelector(".deleteProj").onclick = async () => {
+      if (!confirm("Projekt „" + name + "“ wirklich löschen? Der Projektordner und die Medien werden sofort entfernt.")) return;
+      showErr("err", "");
+      const res = await fetch("/api/projects/" + encodeURIComponent(name), {method: "DELETE", credentials: "same-origin"});
       const d = await res.json().catch(()=>({}));
-      if (!res.ok) { showErr("err", detailMsg(d) || "Port speichern fehlgeschlagen"); return; }
+      if (!res.ok) { showErr("err", detailMsg(d) || "Löschen fehlgeschlagen"); return; }
       loadMain();
     };
   });
@@ -381,29 +371,28 @@ async function loadMain(){
     (sys.cpu_percent != null ? ("CPU " + sys.cpu_percent + "% · RAM " + sys.ram_percent + "%") : "");
 }
 document.getElementById("tabProjectsBtn").onclick = () => showTab("projects");
+document.getElementById("tabServerBtn").onclick = () => showTab("server");
 document.getElementById("tabLogsBtn").onclick = () => showTab("logs");
-document.getElementById("linksLocal").onclick = () => {
-  linkMode = "local";
-  localStorage.setItem("pfSetupLinkMode", linkMode);
-  loadMain();
-};
-document.getElementById("linksPublic").onclick = () => {
-  linkMode = "public";
-  localStorage.setItem("pfSetupLinkMode", linkMode);
-  loadMain();
-};
 document.getElementById("savePublic").onclick = async () => {
-  showErr("err", "");
+  showErr("servererr", "");
   const res = await postJson("/api/runtime", {
-    public_host: document.getElementById("pubhost").value,
-    public_https: document.getElementById("pubhttps").checked
+    public_host: document.getElementById("pubhost").value
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) { showErr("err", detailMsg(data) || "Adresse speichern fehlgeschlagen"); return; }
+  if (!res.ok) { showErr("servererr", detailMsg(data) || "Adresse speichern fehlgeschlagen"); return; }
+  loadMain();
+};
+document.getElementById("saveMedia").onclick = async () => {
+  showErr("servererr", "");
+  const res = await postJson("/api/runtime", {
+    media_root: document.getElementById("mediaroot").value
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) { showErr("servererr", detailMsg(data) || "Medienordner speichern fehlgeschlagen"); return; }
   loadMain();
 };
 document.getElementById("checkUpdate").onclick = async () => {
-  showErr("err", "");
+  showErr("servererr", "");
   showErr("updateerr", "");
   const info = document.getElementById("updateinfo");
   const checkBtn = document.getElementById("checkUpdate");
@@ -435,7 +424,7 @@ document.getElementById("checkUpdate").onclick = async () => {
 };
 document.getElementById("doUpdate").onclick = async () => {
   if (!confirm("Update von origin/main einspielen? Der Server startet danach neu. data/ und projects/ bleiben.")) return;
-  showErr("err", "");
+  showErr("servererr", "");
   showErr("updateerr", "");
   const info = document.getElementById("updateinfo");
   const checkBtn = document.getElementById("checkUpdate");
@@ -463,11 +452,10 @@ document.getElementById("doUpdate").onclick = async () => {
   doBtn.disabled = false;
 };
 document.getElementById("saveLevel").onclick = async () => {
-  showErr("logerr", "");
+  showErr("loglevelerr", "");
   const res = await postJson("/api/runtime", {log_level: document.getElementById("loglevel").value});
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) { showErr("logerr", detailMsg(data) || "Level speichern fehlgeschlagen"); return; }
-  loadLogs();
+  if (!res.ok) { showErr("loglevelerr", detailMsg(data) || "Level speichern fehlgeschlagen"); return; }
 };
 document.getElementById("refreshLogs").onclick = () => loadLogs();
 document.getElementById("downloadLogs").onclick = () => { location.href = "/api/setup/logs/download"; };
@@ -503,13 +491,14 @@ document.getElementById("init").onsubmit = async (e) => {
   location.href = "/setup";
 };
 document.getElementById("savePort").onclick = async () => {
+  showErr("servererr", "");
   const res = await fetch("/api/runtime", {
     method: "POST",
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify({port: parseInt(document.getElementById("port").value, 10)})
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) { showErr("err", detailMsg(data) || "Port speichern fehlgeschlagen"); return; }
+  if (!res.ok) { showErr("servererr", detailMsg(data) || "Port speichern fehlgeschlagen"); return; }
   if (data.restart && data.setup_url) {
     beginPortWait(data.setup_url, data.wait_seconds);
     return;

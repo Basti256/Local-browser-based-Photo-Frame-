@@ -10,10 +10,9 @@ from typing import Any
 from fastapi import HTTPException
 
 from server.context import get_current_project
-from server.defaults import DEFAULT_CONFIG, STORAGE_MODES, migrate_config
+from server.defaults import DEFAULT_CONFIG, migrate_config
 from server.paths import PROJECTS_DIR
-from server.restart import listen_port
-from server.runtime import load_runtime, parse_port, update_runtime
+from server.runtime import load_runtime, update_runtime
 from server.slugs import is_reserved_segment
 
 SETUP_OWNED_KEYS = frozenset({
@@ -50,6 +49,10 @@ class ProjectPaths:
 
     @property
     def media(self) -> Path:
+        from server.runtime import load_runtime
+        root = str(load_runtime().get("media_root") or "").strip()
+        if root:
+            return Path(root) / self.name
         cfg = self._storage_config()
         if (cfg.get("storage_mode") or "project") == "folder":
             raw = str(cfg.get("storage_path") or "").strip()
@@ -113,7 +116,6 @@ def create_project(name: str) -> ProjectPaths:
         raise HTTPException(status_code=409, detail="Projekt existiert bereits.")
     paths.ensure()
     config = DEFAULT_CONFIG.copy()
-    config["port"] = allocate_project_port()
     save_project_config(paths, config)
     from server.pin import ensure_project_pin
     ensure_project_pin(paths)
@@ -163,53 +165,10 @@ def write_imported_asset(paths: ProjectPaths, folder: str, filename: str, data: 
 
 
 
-def project_listen_port(paths: ProjectPaths | None = None, config: dict[str, Any] | None = None) -> int:
-    if config is None:
-        config = load_project_config(paths) if paths else {}
-    try:
-        return parse_port(config.get("port", 8000))
-    except ValueError:
-        return 8000
-
-
-def used_project_ports(exclude: str | None = None) -> set[int]:
-    used = {listen_port()}
-    for name in list_projects():
-        if exclude and name == exclude:
-            continue
-        used.add(project_listen_port(ProjectPaths(name)))
-    return used
-
-
 def port_in_use(port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.settimeout(0.2)
         return sock.connect_ex(("127.0.0.1", port)) == 0
-
-
-def allocate_project_port() -> int:
-    used = used_project_ports()
-    port = 8000
-    while port in used or port_in_use(port):
-        port += 1
-        if port > 65535:
-            raise HTTPException(status_code=500, detail="Kein freier Projekt-Port.")
-    return port
-
-
-def apply_listen_port(paths: ProjectPaths, port: int) -> dict[str, Any]:
-    try:
-        port = parse_port(port)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    if port == listen_port():
-        raise HTTPException(status_code=400, detail="Port ist der Einrichtungs-Port.")
-    if port in used_project_ports(exclude=paths.name):
-        raise HTTPException(status_code=409, detail="Port ist einem anderen Projekt zugeordnet.")
-    cfg = load_project_config(paths)
-    cfg["port"] = port
-    save_project_config(paths, cfg)
-    return cfg
 
 
 def get_paths(name: str | None = None) -> ProjectPaths | None:
@@ -279,29 +238,55 @@ def save_project_config(paths: ProjectPaths, config: dict[str, Any]) -> None:
         f.write("\n")
 
 
-def apply_storage(paths: ProjectPaths, mode: str, storage_path: str) -> dict[str, Any]:
-    mode = (mode or "project").strip()
-    if mode not in STORAGE_MODES:
-        raise HTTPException(status_code=400, detail="Speicher: project oder folder.")
-    cfg = load_project_config(paths)
-    cfg["storage_mode"] = mode
-    raw = (storage_path or "").strip().strip('"')
-    if mode == "folder":
-        if not raw:
-            raise HTTPException(status_code=400, detail="Ordnerpfad angeben (lokal, UNC oder Mount).")
-        target = Path(raw)
+def apply_media_root(raw: str) -> str:
+    root = (raw or "").strip().strip('"')
+    if not root:
+        update_runtime(media_root="")
+        return ""
+    target = Path(root)
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        raise HTTPException(status_code=400, detail="Medienordner nicht nutzbar.") from e
+    if not target.is_dir():
+        raise HTTPException(status_code=400, detail="Pfad ist kein Ordner.")
+    update_runtime(media_root=str(target))
+    for name in list_projects():
+        ProjectPaths(name).ensure()
+    return str(target)
+
+
+def delete_project(name: str) -> None:
+    name = validate_project_name(name)
+    paths = ProjectPaths(name)
+    if not paths.config_file.is_file():
+        raise HTTPException(status_code=404, detail="Projekt nicht gefunden.")
+    media = paths.media
+    project_media = (paths.root / "media").resolve()
+    try:
+        import shutil
+        shutil.rmtree(paths.root)
+    except OSError as e:
+        raise HTTPException(status_code=500, detail="Projektordner konnte nicht gelöscht werden.") from e
+    try:
+        extra = media.resolve()
+    except OSError:
+        return
+    if extra == project_media or not extra.exists():
+        return
+    root = str(load_runtime().get("media_root") or "").strip()
+    if not root:
+        return
+    try:
+        expected = (Path(root) / name).resolve()
+    except OSError:
+        return
+    if extra == expected:
         try:
-            target.mkdir(parents=True, exist_ok=True)
-        except OSError as e:
-            raise HTTPException(status_code=400, detail="Ordner nicht nutzbar.") from e
-        if not target.is_dir():
-            raise HTTPException(status_code=400, detail="Pfad ist kein Ordner.")
-        cfg["storage_path"] = str(target)
-    else:
-        cfg["storage_path"] = ""
-    save_project_config(paths, cfg)
-    paths.ensure()
-    return cfg
+            import shutil
+            shutil.rmtree(extra)
+        except OSError:
+            pass
 
 
 def merge_project_config(incoming: dict[str, Any]) -> tuple[dict[str, Any], bool]:
