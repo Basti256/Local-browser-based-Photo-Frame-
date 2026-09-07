@@ -56,6 +56,7 @@ HTTPS (Reverse-Proxy, Anzeige-URLs ohne App-Port)
 <button type="button" id="savePublic">Öffentliche Adresse speichern</button>
 <h2>Update</h2>
 <p class="muted" id="updateinfo">Prüfung und Einspielen nutzen origin/main (fast-forward). data/ und projects/ bleiben unverändert.</p>
+<div class="error" id="updateerr" hidden></div>
 <button type="button" id="checkUpdate">Auf Updates prüfen</button>
 <button type="button" id="doUpdate" class="secondary">Aktualisieren</button>
 
@@ -88,6 +89,7 @@ HTTPS (Reverse-Proxy, Anzeige-URLs ohne App-Port)
 <button type="button" id="refreshLogs" class="secondary">Aktualisieren</button>
 <button type="button" id="downloadLogs" class="secondary">Herunterladen</button>
 <button type="button" id="clearLogs" class="danger">Leeren</button>
+<div class="error" id="logerr" hidden></div>
 <pre class="log" id="logtext"></pre>
 </div>
 </div>
@@ -107,6 +109,11 @@ function showErr(id, msg){
   const el = document.getElementById(id);
   el.textContent = msg;
   el.hidden = !msg;
+}
+function postJson(url, body){
+  const opts = {method: "POST", credentials: "same-origin", headers: {"Content-Type": "application/json"}};
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  return fetch(url, opts);
 }
 function detailMsg(data){
   const d = data && data.detail;
@@ -386,13 +393,10 @@ document.getElementById("linksPublic").onclick = () => {
   loadMain();
 };
 document.getElementById("savePublic").onclick = async () => {
-  const res = await fetch("/api/runtime", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({
-      public_host: document.getElementById("pubhost").value,
-      public_https: document.getElementById("pubhttps").checked
-    })
+  showErr("err", "");
+  const res = await postJson("/api/runtime", {
+    public_host: document.getElementById("pubhost").value,
+    public_https: document.getElementById("pubhttps").checked
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) { showErr("err", detailMsg(data) || "Adresse speichern fehlgeschlagen"); return; }
@@ -400,18 +404,24 @@ document.getElementById("savePublic").onclick = async () => {
 };
 document.getElementById("checkUpdate").onclick = async () => {
   showErr("err", "");
+  showErr("updateerr", "");
   const info = document.getElementById("updateinfo");
   const checkBtn = document.getElementById("checkUpdate");
   const doBtn = document.getElementById("doUpdate");
   checkBtn.disabled = true;
   doBtn.disabled = true;
   info.textContent = "Prüfe origin/main …";
-  const res = await fetch("/api/setup/update/check", {method: "POST"});
+  const res = await postJson("/api/setup/update/check");
   const data = await res.json().catch(() => ({}));
   checkBtn.disabled = false;
   doBtn.disabled = false;
   if (res.status === 401) { location.href = "/login?next=/setup"; return; }
-  if (!res.ok) { showErr("err", detailMsg(data) || "Prüfung fehlgeschlagen"); info.textContent = "Prüfung fehlgeschlagen."; return; }
+  if (!res.ok) {
+    const msg = detailMsg(data) || "Prüfung fehlgeschlagen";
+    showErr("updateerr", msg);
+    info.textContent = "Prüfung fehlgeschlagen.";
+    return;
+  }
   let msg = data.message || "Prüfung abgeschlossen.";
   if (data.current_version || data.remote_version) {
     msg += " Lokal " + (data.current_version || "?");
@@ -426,19 +436,21 @@ document.getElementById("checkUpdate").onclick = async () => {
 document.getElementById("doUpdate").onclick = async () => {
   if (!confirm("Update von origin/main einspielen? Der Server startet danach neu. data/ und projects/ bleiben.")) return;
   showErr("err", "");
+  showErr("updateerr", "");
   const info = document.getElementById("updateinfo");
   const checkBtn = document.getElementById("checkUpdate");
   const doBtn = document.getElementById("doUpdate");
   checkBtn.disabled = true;
   doBtn.disabled = true;
   info.textContent = "Aktualisiere …";
-  const res = await fetch("/api/setup/update", {method: "POST"});
+  const res = await postJson("/api/setup/update");
   const data = await res.json().catch(() => ({}));
   if (res.status === 401) { location.href = "/login?next=/setup"; return; }
   if (!res.ok) {
     checkBtn.disabled = false;
     doBtn.disabled = false;
-    showErr("err", detailMsg(data) || "Update fehlgeschlagen");
+    const msg = detailMsg(data) || "Update fehlgeschlagen";
+    showErr("updateerr", msg);
     info.textContent = "Update fehlgeschlagen.";
     return;
   }
@@ -451,13 +463,10 @@ document.getElementById("doUpdate").onclick = async () => {
   doBtn.disabled = false;
 };
 document.getElementById("saveLevel").onclick = async () => {
-  const res = await fetch("/api/runtime", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({log_level: document.getElementById("loglevel").value})
-  });
+  showErr("logerr", "");
+  const res = await postJson("/api/runtime", {log_level: document.getElementById("loglevel").value});
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) { showErr("err", detailMsg(data) || "Level speichern fehlgeschlagen"); return; }
+  if (!res.ok) { showErr("logerr", detailMsg(data) || "Level speichern fehlgeschlagen"); return; }
   loadLogs();
 };
 document.getElementById("refreshLogs").onclick = () => loadLogs();

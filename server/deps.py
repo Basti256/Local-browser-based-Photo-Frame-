@@ -14,6 +14,8 @@ def require_user(request: Request) -> str:
     if not name:
         raise HTTPException(status_code=401, detail="Anmeldung erforderlich.")
     if request.method not in ("GET", "HEAD", "OPTIONS") and not same_origin(request):
+        from server.applog import log
+        log("WARNING", "Anfrage abgelehnt: Herkunft passt nicht zum Host")
         raise HTTPException(status_code=403, detail="Ungültige Herkunft.")
     return name
 

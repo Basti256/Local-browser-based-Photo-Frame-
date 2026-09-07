@@ -3,7 +3,7 @@
 Handbuch der Software. Funktionen, Schnittstellen, Ports, Betrieb.
 Keine personenbezogenen Daten. Keine Zugangsdaten.
 
-Version des beschriebenen Stands: 2.17.0
+Version des beschriebenen Stands: 2.17.1
 
 ---
 
@@ -144,7 +144,7 @@ Gilt für `/admin` und schreibende Admin-APIs des aktiven Projekts. Beim Anlegen
 - Nach Fehlversuch n: Wartezeit `min(3600, 2^n)` Sekunden (erster Fehler: 2 s). Während der Sperre keine PIN-Prüfung. Die Wartezeit gilt projektweit. Korrekter PIN setzt den Zähler zurück.
 - Fehlt ein PIN (ältere Projekte): die Einrichtung erzeugt beim nächsten Laden einen neuen 4-stelligen PIN.
 
-Zustandsändernde authentifizierte Anfragen: Origin muss zur Server-Basis-URL passen oder fehlen.
+Zustandsändernde authentifizierte Anfragen: Header `Origin` muss zum Host der Anfrage passen (`Host` oder `X-Forwarded-Host`) oder fehlen. Das Schema darf abweichen (HTTPS am Reverse-Proxy, HTTP in der App).
 
 ### Geschützt (Master)
 

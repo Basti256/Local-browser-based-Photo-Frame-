@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import secrets
 from typing import Any
+from urllib.parse import urlparse
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHash, VerifyMismatchError
@@ -120,9 +121,41 @@ def session_username(request: Request) -> str | None:
     return SETUP_USERNAME
 
 
+def _host_key(netloc: str) -> tuple[str, str]:
+    host = (netloc or "").strip().lower().rstrip(".")
+    if host.startswith("["):
+        end = host.find("]")
+        name = host[: end + 1] if end != -1 else host
+        return name, host
+    if host.count(":") == 1:
+        return host.split(":", 1)[0], host
+    return host, host
+
+
 def same_origin(request: Request) -> bool:
+    """CSRF: Origin-Host muss zum Host der Anfrage passen. Schema darf durch Reverse-Proxy abweichen."""
     origin = request.headers.get("origin")
     if not origin:
         return True
-    base = str(request.base_url).rstrip("/")
-    return origin.rstrip("/") == base
+    origin_host = (urlparse(origin).netloc or "").strip()
+    if not origin_host:
+        return False
+    origin_name, origin_full = _host_key(origin_host)
+    candidates: list[str] = []
+    for raw in (
+        request.headers.get("x-forwarded-host"),
+        request.headers.get("host"),
+        urlparse(str(request.base_url)).netloc,
+    ):
+        if not raw:
+            continue
+        host = raw.split(",")[0].strip()
+        if host:
+            candidates.append(host)
+    names = set()
+    fulls = set()
+    for item in candidates:
+        name, full = _host_key(item)
+        names.add(name)
+        fulls.add(full)
+    return origin_full in fulls or origin_name in names

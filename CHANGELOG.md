@@ -4,6 +4,14 @@ Alle wesentlichen Änderungen am Local-browser-based-Photo-Frame werden in diese
 
 ---
 
+## [2.17.1] – 2026-09-07
+
+### Behoben
+
+- Setup-POST (Update, Log-Level, Runtime) hinter HTTPS/Reverse-Proxy: Herkunftsprüfung vergleicht den Host, nicht mehr `http` gegen `https`. Die Fehlermeldung steht direkt bei den Schaltflächen.
+
+---
+
 ## [2.17.0] – 2026-09-07
 
 ### Neu
