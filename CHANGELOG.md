@@ -4,6 +4,22 @@ Alle wesentlichen Änderungen am Local-browser-based-Photo-Frame werden in diese
 
 ---
 
+## [2.18.4] – 2026-09-07
+
+### Geändert
+
+- Einrichtung: Projektkarten standardmäßig zugeklappt. Sichtbar bleiben Links, klickbare URLs (neuer Tab), Start oder Stoppen und eine PIN-Taste daneben. Details per Schaltfläche.
+
+---
+
+## [2.18.3] – 2026-09-07
+
+### Geändert
+
+- Unbekannte Pfade (z. B. `/irgendetwas`) liefern 404 ohne Körper, ohne FastAPI-JSON und ohne Hinweis-HTML. `/docs` und OpenAPI sind aus. Definierte Seiten und API-Fehlertexte bleiben.
+
+---
+
 ## [2.18.2] – 2026-09-07
 
 ### Geändert

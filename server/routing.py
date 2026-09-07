@@ -3,10 +3,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from starlette.responses import Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from server.context import reset_current_project, reset_url_prefix, set_current_project, set_url_prefix
-from server.project import PROJECT_NAME_RE, find_project_by_slug
+from server.project import find_project_by_slug
 from server.project_runner import is_control_only, runner
 from server.restart import setup_url_for_port
 from server.slugs import is_reserved_segment
@@ -14,6 +15,10 @@ from server.slugs import is_reserved_segment
 STATUS_OK = "ok"
 STATUS_STOPPED = "stopped"
 STATUS_MISSING = "missing"
+
+
+def empty_not_found() -> Response:
+    return Response(status_code=404, content=b"", headers={"cache-control": "no-store"})
 
 
 @dataclass(frozen=True)
@@ -66,14 +71,6 @@ def resolve_control_path(
         return PrefixResult(path=path, project=None, prefix="", status=None)
     name = find_project_by_slug(first)
     if name is None:
-        if PROJECT_NAME_RE.match(first):
-            prefix = "/" + first
-            return PrefixResult(
-                path=remainder,
-                project=None,
-                prefix=prefix,
-                status=STATUS_MISSING,
-            )
         return PrefixResult(path=path, project=None, prefix="", status=None)
     from server.network import normalize_mode, request_is_lan
     from server.project import ProjectPaths, load_project_config
@@ -216,9 +213,9 @@ def control_only_blocked(scope: Scope, path: str) -> bool:
 
 
 def setup_redirect_response(request, send_status: int = 302):
-    from fastapi.responses import JSONResponse, RedirectResponse
+    from fastapi.responses import RedirectResponse
     from server.restart import listen_port
     path = request.url.path
     if path.startswith("/api/"):
-        return JSONResponse({"detail": "Nur auf dem Serverport."}, status_code=404)
+        return empty_not_found()
     return RedirectResponse(setup_url_for_port(request, listen_port()), status_code=send_status)

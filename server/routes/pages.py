@@ -17,7 +17,7 @@ from server.project import (
     load_project_config,
 )
 from server.project_runner import runner
-from server.routing import STATUS_MISSING, STATUS_STOPPED, with_prefix
+from server.routing import STATUS_MISSING, STATUS_STOPPED, empty_not_found, with_prefix
 
 router = APIRouter()
 _HEAD_RE = re.compile(r"<head[^>]*>", re.IGNORECASE)
@@ -142,7 +142,7 @@ def admin_browser_page(request: Request):
 def _project_html_gate(request: Request):
     status = _slug_status(request)
     if status == STATUS_MISSING:
-        return _no_project()
+        return empty_not_found()
     if status == STATUS_STOPPED:
         return _stopped()
     return None
@@ -179,11 +179,11 @@ def _legacy_project_redirect(name: str, dest: str, request: Request | None = Non
     from server.project import ProjectPaths, find_project_by_slug, load_project_config
     found = find_project_by_slug(name)
     if not found:
-        return _no_project()
+        return empty_not_found()
     name = found
     cfg = load_project_config(ProjectPaths(name))
     if normalize_mode(cfg.get("network_mode")) != "public" and not request_is_lan(_request_hosts(request)):
-        return HTMLResponse("Not Found", status_code=404)
+        return empty_not_found()
     if not runner.is_running(name):
         return _stopped()
     if dest == "/":

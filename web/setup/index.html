@@ -112,6 +112,7 @@
 let waitTimer = null;
 let logTimer = null;
 let logTabOpen = false;
+const pinVisible = new Set();
 function showErr(id, msg){
   const el = document.getElementById(id);
   el.textContent = msg;
@@ -221,15 +222,27 @@ function projectLinks(p){
     <a href="${esc(base)}/admin/browser" target="_blank">Medienbrowser</a>${note}
   </p>`;
 }
+function projectUrls(p){
+  const bits = [];
+  if (p.local_url) {
+    bits.push(`<p>LAN: <a href="${esc(p.local_url)}" target="_blank" rel="noopener">${esc(p.local_url)}</a></p>`);
+  }
+  if (p.network_mode === "public") {
+    if (p.public_url) {
+      bits.push(`<p>Öffentlich: <a href="${esc(p.public_url)}" target="_blank" rel="noopener">${esc(p.public_url)}</a></p>`);
+    } else {
+      bits.push(`<p class="muted">Öffentlich: — zuerst die Server-Adresse unter Server eintragen</p>`);
+    }
+  }
+  return bits.length ? `<div class="proj-urls">${bits.join("")}</div>` : "";
+}
 function projectCard(p){
   const enc = encodeURIComponent(p.name);
   const status = p.running ? "läuft" : "gestoppt";
+  const pinText = p.pin ? esc(p.pin) : (p.has_pin ? "gesetzt, nicht anzeigbar" : "fehlt");
   const pinLock = p.pin_lock && p.pin_lock.locked
     ? `<p class="warn">Login unter ${esc(p.pin_lock.path)} gesperrt für ${Math.ceil(p.pin_lock.wait_seconds)} s (zu viele Fehlversuche).</p>`
     : "";
-  const publicLine = p.network_mode === "public"
-    ? `<p class="muted">Öffentliche URL: ${p.public_url ? esc(p.public_url) : "— zuerst die Server-Adresse unter Server eintragen"}</p>`
-    : `<p class="muted">Keine öffentliche Adresse (Modus Network, nur LAN).</p>`;
   const linkSwitch = p.network_mode === "public"
     ? `<div class="switch">
         <span class="muted">Links:</span>
@@ -237,17 +250,24 @@ function projectCard(p){
         <button type="button" class="linksPublic">Öffentlich</button>
       </div>`
     : "";
-  return `<div class="card" style="margin:12px 0;padding:16px;" data-name="${esc(p.name)}" data-mode="${esc(p.network_mode)}">
-    <p><strong>${esc(p.name)}</strong> · ${status} · ${p.media_count} Medien</p>
-    <p>Admin-PIN: <strong style="letter-spacing:0.18em;font-size:1.25rem">${p.pin ? esc(p.pin) : (p.has_pin ? "gesetzt, nicht anzeigbar" : "fehlt")}</strong></p>
-    ${pinLock}
-    ${linkSwitch}
+  const act = p.running
+    ? '<button type="button" class="danger stop">Stoppen</button>'
+    : '<button type="button" class="start">Starten</button>';
+  return `<div class="card proj-card" data-name="${esc(p.name)}" data-mode="${esc(p.network_mode)}">
+    <div class="proj-head">
+      <p style="margin:0"><strong>${esc(p.name)}</strong> · ${status} · ${p.media_count} Medien</p>
+      <button type="button" class="secondary toggleDetails">Details</button>
+    </div>
     ${projectLinks(p)}
-    <p class="muted">LAN: ${esc(p.local_url)}</p>
-    ${publicLine}
-    ${p.running
-      ? '<button type="button" class="danger stop">Stoppen</button>'
-      : '<button type="button" class="start">Starten</button>'}
+    ${projectUrls(p)}
+    ${pinLock}
+    <div class="proj-actions">
+      ${act}
+      <button type="button" class="secondary showPin">PIN</button>
+      <span class="proj-pin" hidden>${pinText}</span>
+    </div>
+    <div class="proj-details" hidden>
+    ${linkSwitch}
     <label>Modus</label>
     <select class="pmode">
       <option value="network" ${p.network_mode==="network"?"selected":""}>Network (nur LAN, keine öffentliche URL)</option>
@@ -259,6 +279,7 @@ function projectCard(p){
     <button type="button" class="savePin">PIN speichern</button>
     <a class="btn secondary" href="/api/projects/${enc}/export">Export</a>
     <button type="button" class="danger deleteProj">Projekt löschen</button>
+    </div>
   </div>`;
 }
 function showTab(which){
@@ -343,6 +364,25 @@ async function loadMain(){
     const mode = card.getAttribute("data-mode");
     const loc = card.querySelector(".linksLocal");
     const pub = card.querySelector(".linksPublic");
+    const details = card.querySelector(".proj-details");
+    const toggle = card.querySelector(".toggleDetails");
+    const pinEl = card.querySelector(".proj-pin");
+    const open = localStorage.getItem("pfProjOpen:" + name) === "1";
+    details.hidden = !open;
+    toggle.textContent = open ? "Zuklappen" : "Details";
+    if (pinVisible.has(name)) pinEl.hidden = false;
+    toggle.onclick = () => {
+      const next = details.hidden;
+      details.hidden = !next;
+      toggle.textContent = next ? "Zuklappen" : "Details";
+      localStorage.setItem("pfProjOpen:" + name, next ? "1" : "0");
+    };
+    card.querySelector(".showPin").onclick = () => {
+      const show = pinEl.hidden;
+      pinEl.hidden = !show;
+      if (show) pinVisible.add(name);
+      else pinVisible.delete(name);
+    };
     if (loc && pub) {
       const current = cardLinkMode(name, mode);
       loc.classList.toggle("active", current === "local");

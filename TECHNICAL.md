@@ -3,7 +3,7 @@
 Handbuch der Software. Funktionen, Schnittstellen, Ports, Betrieb.
 Keine personenbezogenen Daten. Keine Zugangsdaten.
 
-Version des beschriebenen Stands: 2.18.2
+Version des beschriebenen Stands: 2.18.4
 
 ---
 
@@ -170,7 +170,7 @@ Projektseiten, APIs, WebSocket, Medien und `sw.js` hängen unter `/{name}/…` (
 | Methode | Pfad | Funktion |
 |---------|------|----------|
 | GET | `/` | Ohne Prefix: Umleitung auf `/setup`. Unter `/{name}`: Wall |
-| GET | `/{name}/wall` | Fly oder Grid, wenn das Projekt läuft. Gestoppt: Hinweisseite. Unbekannt: 404. Modus `network` nur über private LAN-IP, localhost oder `*.local`; sonst 404 |
+| GET | `/{name}/wall` | Fly oder Grid, wenn das Projekt läuft. Gestoppt: Hinweisseite. Unbekanntes erstes Segment: 404 ohne Körper. Modus `network` nur über private LAN-IP, localhost oder `*.local`; sonst 404 ohne Körper |
 | GET | `/{name}/upload` | Gäste-Upload (Network nur LAN; Public auch öffentlich) |
 | GET | `/{name}/admin` | Wand-Einstellungen, nach PIN |
 | GET | `/{name}/admin/classic` | Vorherige Admin-HTML, nach PIN |
@@ -183,11 +183,13 @@ Projektseiten, APIs, WebSocket, Medien und `sw.js` hängen unter `/{name}/…` (
 | GET | `/p/{name}/upload` | Entsprechend Upload |
 | GET | `/p/{name}/admin` | Entsprechend Admin |
 | GET | `/p/{name}/browser` | Entsprechend Medienbrowser |
-| GET | `/setup` | Erststart, Projekte, Server, Protokoll (Log-Level, Auto-Aktualisierung) |
+| GET | `/setup` | Erststart, Projekte (Karten zugeklappt: Links, URLs, Start/Stop, PIN-Taste), Server, Protokoll |
 | GET | `/login` | Anmeldung als Admin |
 | GET | `/logout` | Master-Session löschen |
 
 `{name}` ist der Projektordner. URL-Groß/Kleinschreibung darf abweichen, wenn der Name intern eindeutig ist. Reservierte erste Pfadsegmente, die kein Projekt sein dürfen: `setup`, `login`, `logout`, `admin`, `wall`, `upload`, `api`, `media`, `derived`, `header`, `background`, `p`, `ws`, `static`, `assets` (plus `sw.js`, `favicon.ico`, `robots.txt`).
+
+Pfade ohne passende Route (inkl. `/docs`, `/openapi.json`, `/irgendetwas`) antworten mit HTTP 404 und leerem Körper. Kein JSON `Not Found`, keine Hinweis-HTML. API-Endpunkte, die eine bekannte Ressource nicht finden, behalten ihren Fehlertext.
 
 Unter `/{name}/` gelten dieselben APIs und Dateipfade wie ohne Prefix: `/ws`, `/api/*`, `/media/*`, `/derived/*`, `/header/*`, `/background/*`, `/sw.js`.
 

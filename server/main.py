@@ -2,7 +2,9 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from server.firewall import close_firewall_port, open_firewall_port
 from server.paths import WEB_DIR, ensure_data_dir
@@ -11,6 +13,7 @@ from server.routing import (
     ProjectPrefixASGI,
     attach_request_context,
     control_only_blocked,
+    empty_not_found,
     reset_request_context,
     setup_redirect_response,
 )
@@ -42,7 +45,21 @@ async def lifespan(app: FastAPI):
         print("Firewall konnte nicht geschlossen werden:", e)
 
 
-fastapi_app = FastAPI(title="Local-browser-based-Photo-Frame", version=__version__, lifespan=lifespan)
+fastapi_app = FastAPI(
+    title="Local-browser-based-Photo-Frame",
+    version=__version__,
+    lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
+
+
+@fastapi_app.exception_handler(StarletteHTTPException)
+async def silent_unmatched_404(request: Request, exc: StarletteHTTPException):
+    if exc.status_code == 404 and exc.detail == "Not Found":
+        return empty_not_found()
+    return await http_exception_handler(request, exc)
 
 
 @fastapi_app.middleware("http")
