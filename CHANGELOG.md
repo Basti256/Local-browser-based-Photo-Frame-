@@ -4,6 +4,14 @@ Alle wesentlichen Änderungen am Local-browser-based-Photo-Frame werden in diese
 
 ---
 
+## [2.20.3] – 2026-09-07
+
+### Behoben
+
+- Wall bei 90°/270°: Fotos und Videos fliegen wieder (nicht mehr sofort als „außerhalb“ entfernt). Debug-Bahnlinien folgen der gedrehten Bühne.
+
+---
+
 ## [2.20.2] – 2026-09-07
 
 ### Behoben

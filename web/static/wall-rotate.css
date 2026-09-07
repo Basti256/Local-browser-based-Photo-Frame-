@@ -26,6 +26,15 @@ width:100dvh;
 height:100vw;
 }
 #wallRotateBar,#wallRotate{display:none!important}
+#wallStage #laneDebugOverlay{
+position:absolute;
+left:0;
+top:0;
+right:0;
+bottom:0;
+width:100%;
+height:100%;
+}
 html.wall-rot-0 #wallStage{transform:translate(-50%,-50%) rotate(0deg)}
 html.wall-rot-90 #wallStage{transform:translate(-50%,-50%) rotate(90deg)}
 html.wall-rot-180 #wallStage{transform:translate(-50%,-50%) rotate(180deg)}

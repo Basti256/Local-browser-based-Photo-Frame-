@@ -115,8 +115,13 @@ z-index:10;
 }
 
 #laneDebugOverlay{
-position:fixed;
-inset:0;
+position:absolute;
+left:0;
+top:0;
+right:0;
+bottom:0;
+width:100%;
+height:100%;
 pointer-events:none;
 z-index:400;
 display:none;
@@ -1508,7 +1513,7 @@ dbgV.className="frameDebugFilename"
 dbgV.textContent=file
 dbgV.style.display=config.debug_overlay?"block":"none"
 frame.appendChild(dbgV)
-document.body.appendChild(frame)
+wallMount(frame)
 currentVideos++
 
 element.play()
@@ -1684,7 +1689,7 @@ dbgI.className="frameDebugFilename"
 dbgI.textContent=file
 dbgI.style.display=config.debug_overlay?"block":"none"
 frame.appendChild(dbgI)
-document.body.appendChild(frame)
+wallMount(frame)
 currentImages++
 
 /* Highlight / Center Highlight */

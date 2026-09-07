@@ -11,6 +11,10 @@
     return ANGLES.indexOf(n) >= 0 ? n : 0;
   }
 
+  function wallStageEl() {
+    return document.getElementById("wallStage");
+  }
+
   function stripLegacyControl() {
     var bar = document.getElementById("wallRotateBar");
     if (bar && bar.parentNode) bar.parentNode.removeChild(bar);
@@ -25,24 +29,29 @@
   }
 
   function wallInnerWidth() {
-    var el = document.getElementById("wallStage");
+    var el = wallStageEl();
     if (el && el.clientWidth) return el.clientWidth;
     return rotation === 90 || rotation === 270 ? global.innerHeight : global.innerWidth;
   }
 
   function wallInnerHeight() {
-    var el = document.getElementById("wallStage");
+    var el = wallStageEl();
     if (el && el.clientHeight) return el.clientHeight;
     return rotation === 90 || rotation === 270 ? global.innerWidth : global.innerHeight;
   }
 
+  function wallMount(node) {
+    var stage = wallStageEl();
+    (stage || document.body).appendChild(node);
+  }
+
   function wallClientRect(el) {
     if (!el) return { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
+    var stage = wallStageEl();
     var er = el.getBoundingClientRect();
     var lw = wallInnerWidth();
     var lh = wallInnerHeight();
-    if (!rotation) {
-      var stage = document.getElementById("wallStage");
+    if (!stage || !rotation) {
       var sr = stage ? stage.getBoundingClientRect() : { left: 0, top: 0 };
       return {
         left: er.left - sr.left,
@@ -55,9 +64,6 @@
     }
     var cx = global.innerWidth / 2;
     var cy = global.innerHeight / 2;
-    var rad = -rotation * Math.PI / 180;
-    var cos = Math.cos(rad);
-    var sin = Math.sin(rad);
     var corners = [
       [er.left, er.top],
       [er.right, er.top],
@@ -66,11 +72,24 @@
     ];
     var xs = [];
     var ys = [];
-    for (var i = 0; i < 4; i++) {
+    var i;
+    for (i = 0; i < 4; i++) {
       var dx = corners[i][0] - cx;
       var dy = corners[i][1] - cy;
-      xs.push(dx * cos - dy * sin + lw / 2);
-      ys.push(dx * sin + dy * cos + lh / 2);
+      var lx;
+      var ly;
+      if (rotation === 90) {
+        lx = dy;
+        ly = -dx;
+      } else if (rotation === 180) {
+        lx = -dx;
+        ly = -dy;
+      } else {
+        lx = -dy;
+        ly = dx;
+      }
+      xs.push(lx + lw / 2);
+      ys.push(ly + lh / 2);
     }
     var left = Math.min.apply(null, xs);
     var right = Math.max.apply(null, xs);
@@ -110,6 +129,7 @@
   global.wallInnerWidth = wallInnerWidth;
   global.wallInnerHeight = wallInnerHeight;
   global.wallClientRect = wallClientRect;
+  global.wallMount = wallMount;
   global.wallDisplayRotation = function () { return rotation; };
   global.applyWallDisplayRotation = applyWallDisplayRotation;
 })(window);
