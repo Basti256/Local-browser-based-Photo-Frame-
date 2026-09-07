@@ -25,9 +25,8 @@ backup-*/
 /projects/*
 !/projects/.gitkeep
 
-# Local smoke-test output (regenerate with testdata/generate_smoke_*.py)
-testdata/smoke-images/
-testdata/smoke-videos/
+# Local testdata (generators, notes, smoke output)
+testdata/
 
 # Optional local tunnel binaries (do not commit)
 bin/cloudflared
@@ -37,6 +36,7 @@ bin/*.exe
 # IDE / Editor
 .idea/
 .vscode/
+.cursor/
 *.swp
 *.swo
 
