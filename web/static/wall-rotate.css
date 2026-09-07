@@ -12,6 +12,7 @@ top:50%;
 overflow:hidden;
 background:#000;
 transform-origin:50% 50%;
+z-index:0;
 }
 html.wall-rot-0 #wallStage,
 html.wall-rot-180 #wallStage{
@@ -26,6 +27,51 @@ width:100dvh;
 height:100vw;
 }
 #wallRotateBar,#wallRotate{display:none!important}
+#connectionStatus{
+position:fixed;
+top:10px;
+right:10px;
+width:14px;
+height:14px;
+border-radius:50%;
+background:red;
+box-shadow:0 0 6px rgba(0,0,0,0.6);
+z-index:100000;
+transition:opacity 1s;
+pointer-events:none;
+}
+#debugWallRotate{
+position:fixed;
+left:10px;
+bottom:10px;
+z-index:100001;
+display:none;
+align-items:center;
+gap:8px;
+padding:8px 10px;
+border-radius:10px;
+background:rgba(0,0,0,0.7);
+color:#fff;
+font:13px/1.2 system-ui, Arial, sans-serif;
+pointer-events:auto;
+}
+#debugWallRotate label{
+white-space:nowrap;
+}
+#debugWallRotateSel{
+font:13px/1.2 system-ui, Arial, sans-serif;
+min-height:32px;
+max-width:min(72vw, 260px);
+border:0;
+border-radius:6px;
+padding:4px 6px;
+background:#fff;
+color:#111;
+}
+#debugWallRotate .debugWallRotateHint{
+opacity:0.75;
+white-space:nowrap;
+}
 #wallStage #laneDebugOverlay{
 position:absolute;
 left:0;

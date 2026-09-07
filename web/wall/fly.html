@@ -50,27 +50,6 @@ display:none;
 
 }
 
-#connectionStatus{
-
-position:absolute;
-top:10px;
-right:10px;
-
-width:14px;
-height:14px;
-
-border-radius:50%;
-
-background:red;
-
-box-shadow:0 0 6px rgba(0,0,0,0.6);
-
-z-index:6000;
-
-transition:opacity 1s;
-
-}
-
 .photoFrame{
 position:absolute;
 background:white;
@@ -246,8 +225,6 @@ overflow:hidden;
 
 <div id="wallBackground" aria-hidden="true"><img alt=""></div>
 
-<div id="connectionStatus"></div>
-
 <div id="banner"></div>
 
 <div id="qrContainer">
@@ -285,6 +262,8 @@ let debugLogs=[]
 let reservedImages=new Set()
 let reservedVideos=new Set()
 let spawnLaneCursor=-1
+let spawnLaneHistory=[]
+let spawnLaneUses=[]
 let burstOriginTime=Date.now()
 let burstDebugRaf=0
 let spawnFlashTimer=0
@@ -361,7 +340,6 @@ let maxX=Math.max(0, wallInnerWidth()-size)
 let laneCount=spawnLaneCount()
 let order=String(config.spawn_lane_order||"random_apart").toLowerCase()
 if(order!=="random" && order!=="adjacent" && order!=="random_apart") order="random_apart"
-if(spawnLaneCursor>=laneCount) spawnLaneCursor=-1
 function laneX(i){
 return spawnLaneLeft(i, size)
 }
@@ -380,22 +358,24 @@ if(right>o.left && left<o.right) return true
 }
 return false
 }
-function farthestFromOccupied(indices){
-let best=indices[0], bestD=-1
-for(let n=0;n<indices.length;n++){
-let i=indices[n]
-let cx=laneX(i)+size/2
-let d=occupied.length?Math.min.apply(null, occupied.map(o=>Math.abs(cx-o.cx))):maxX
-if(d>bestD){ bestD=d; best=i }
+if(spawnLaneUses.length!==laneCount){
+let nu=[]
+for(let n=0;n<laneCount;n++) nu[n]=spawnLaneUses[n]||0
+spawnLaneUses=nu
 }
-return best
+function laneUses(i){ return spawnLaneUses[i]||0 }
+function chooseLeastUsed(pool){
+if(!pool.length) return -1
+let minU=Infinity
+for(let n=0;n<pool.length;n++){
+let u=laneUses(pool[n])
+if(u<minU) minU=u
 }
-function pickFrom(indices){
-if(!indices.length) return 0
-let free=indices.filter(i=>!tooClose(laneX(i)))
-if(free.length) return free[Math.floor(Math.random()*free.length)]
-return farthestFromOccupied(indices)
+let least=pool.filter(i=>laneUses(i)===minU)
+return least[Math.floor(Math.random()*least.length)]
 }
+let last=spawnLaneHistory.length?spawnLaneHistory[spawnLaneHistory.length-1]:-1
+let prev=spawnLaneHistory.length>=2?spawnLaneHistory[spawnLaneHistory.length-2]:-1
 function allLanes(){
 let a=[]
 for(let i=0;i<laneCount;i++) a.push(i)
@@ -405,33 +385,39 @@ let chosenLane=0
 if(laneCount<=1){
 chosenLane=0
 }else if(order==="adjacent"){
-let start=spawnLaneCursor<0?0:(spawnLaneCursor+1)%laneCount
+let start=last<0?0:(last+1)%laneCount
 let seq=[]
 for(let n=0;n<laneCount;n++) seq.push((start+n)%laneCount)
 let free=seq.filter(i=>!tooClose(laneX(i)))
-chosenLane=free.length?free[0]:farthestFromOccupied(seq)
-}else if(order==="random_apart"){
-let apart=allLanes()
-if(spawnLaneCursor>=0) apart=apart.filter(i=>Math.abs(i-spawnLaneCursor)>1)
-if(!apart.length){
-let bestDelta=0
-let far=[]
-for(let i=0;i<laneCount;i++){
-if(i===spawnLaneCursor) continue
-let d=Math.abs(i-spawnLaneCursor)
-if(d>bestDelta){ bestDelta=d; far=[i] }
-else if(d===bestDelta) far.push(i)
-}
-apart=far.length?far:allLanes()
+chosenLane=free.length?free[0]:seq[0]
 }else{
-let notSame=apart.filter(i=>i!==spawnLaneCursor)
-if(notSame.length) apart=notSame
+function notSame(i){ return i!==last }
+function notAba(i){ return laneCount<3 || i!==prev }
+function notNeighbor(i){
+if(order!=="random_apart" || last<0) return true
+return Math.abs(i-last)!==1
 }
-chosenLane=pickFrom(apart)
-}else{
-chosenLane=pickFrom(allLanes())
+let all=allLanes()
+let free=all.filter(i=>!tooClose(laneX(i)))
+let pools=[
+free.filter(i=>notSame(i)&&notAba(i)&&notNeighbor(i)),
+free.filter(i=>notSame(i)&&notAba(i)),
+free.filter(notSame),
+all.filter(i=>notSame(i)&&notAba(i)&&notNeighbor(i)),
+all.filter(i=>notSame(i)&&notAba(i)),
+all.filter(notSame),
+all
+]
+chosenLane=0
+for(let p=0;p<pools.length;p++){
+let c=chooseLeastUsed(pools[p])
+if(c>=0){ chosenLane=c; break }
+}
 }
 spawnLaneCursor=chosenLane
+spawnLaneUses[chosenLane]=(spawnLaneUses[chosenLane]||0)+1
+spawnLaneHistory.push(chosenLane)
+if(spawnLaneHistory.length>16) spawnLaneHistory.shift()
 let chosen=laneX(chosenLane)
 let usable=Math.max(0, wallInnerWidth()-spawnMaxFrameSize())
 let laneSpan=laneCount<=1?usable:usable/Math.max(1, laneCount-1)
@@ -450,6 +436,7 @@ let altWakeLockActive=false
 let altWakeLockTick=null
 let lastConnectionBroadcast=0
 const CONNECTION_BROADCAST_DEBOUNCE_MS=500
+let connectionFadeTimer=null
 
 function setConnection(state){
 
@@ -459,20 +446,31 @@ if(!icon) return
 
 serverOnline=state==="online"
 
+if(connectionFadeTimer){
+clearTimeout(connectionFadeTimer)
+connectionFadeTimer=null
+}
+
 if(state==="online"){
 
+icon.style.transition="opacity 1s"
 icon.style.background="lime"
+icon.style.opacity=1
 
-setTimeout(()=>{
-icon.style.opacity=0
+connectionFadeTimer=setTimeout(()=>{
+connectionFadeTimer=null
+if(serverOnline) icon.style.opacity=0
 },5000)
 
 processHighlightQueue()
 
 }else{
 
-icon.style.opacity=1
+icon.style.transition="none"
 icon.style.background="red"
+icon.style.opacity=1
+void icon.offsetWidth
+icon.style.transition="opacity 1s"
 
 }
 
@@ -767,6 +765,8 @@ document.body.classList.toggle("debug-mode",!!config.debug_overlay)
 document.querySelectorAll(".frameDebugFilename").forEach(el=>{el.style.display=config.debug_overlay?"block":"none"})
 updateLaneDebug()
 
+if(window.syncDebugWallRotate) syncDebugWallRotate(config)
+
 if(!config.debug_overlay){
 box.style.display="none"
 return
@@ -853,7 +853,10 @@ async function loadConfig(){
 let res=await fetch("/api/config")
 config=await res.json()
 if(window.applyWallDisplayRotation) applyWallDisplayRotation(config)
+if(window.syncDebugWallRotate) syncDebugWallRotate(config)
 spawnLaneCursor=-1
+spawnLaneHistory=[]
+spawnLaneUses=[]
 burstOriginTime=Date.now()
 stopBurstDebug()
 if(imageSlideshowTimer) clearInterval(imageSlideshowTimer)
@@ -1816,6 +1819,7 @@ setTimeout(zap, 100);
 </script>
 
 </div>
+<div id="connectionStatus"></div>
 </body>
 
 </html>

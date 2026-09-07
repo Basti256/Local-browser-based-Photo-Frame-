@@ -27,19 +27,6 @@ z-index:5000;
 display:none;
 }
 
-#connectionStatus{
-position:absolute;
-top:10px;
-right:10px;
-width:14px;
-height:14px;
-border-radius:50%;
-background:red;
-box-shadow:0 0 6px rgba(0,0,0,0.6);
-z-index:6000;
-transition:opacity 1s;
-}
-
 #gridContainer{
 position:absolute;
 top:0;
@@ -134,8 +121,6 @@ flex-shrink:0;
 
 <div id="wallBackground" aria-hidden="true"><img alt=""></div>
 
-<div id="connectionStatus"></div>
-
 <div id="gridContainer"></div>
 
 <script>
@@ -160,17 +145,30 @@ let altWakeLockTick=null
 let cachedImages=new Set()
 let lastConnectionBroadcast=0
 const CONNECTION_BROADCAST_DEBOUNCE_MS=500
+let connectionFadeTimer=null
 
 function setConnection(state){
 let icon=document.getElementById("connectionStatus")
 if(!icon) return
 serverOnline=state==="online"
+if(connectionFadeTimer){
+clearTimeout(connectionFadeTimer)
+connectionFadeTimer=null
+}
 if(state==="online"){
+icon.style.transition="opacity 1s"
 icon.style.background="lime"
-setTimeout(()=>{ icon.style.opacity=0 },5000)
-}else{
 icon.style.opacity=1
+connectionFadeTimer=setTimeout(()=>{
+connectionFadeTimer=null
+if(serverOnline) icon.style.opacity=0
+},5000)
+}else{
+icon.style.transition="none"
 icon.style.background="red"
+icon.style.opacity=1
+void icon.offsetWidth
+icon.style.transition="opacity 1s"
 }
 if(config&&config.cache_enabled){
 if(!serverStateChannel) serverStateChannel=new BroadcastChannel("wall-server-state")
@@ -195,6 +193,7 @@ function updateDebug(){
 let box=document.getElementById("debugOverlay")
 document.body.classList.toggle("debug-mode",!!config.debug_overlay)
 document.querySelectorAll(".frameDebugFilename").forEach(el=>{el.style.display=config.debug_overlay?"block":"none"})
+if(window.syncDebugWallRotate) syncDebugWallRotate(config)
 if(!config.debug_overlay){
 box.style.display="none"
 return
@@ -670,6 +669,7 @@ setTimeout(zap, 100);
 </script>
 
 </div>
+<div id="connectionStatus"></div>
 </body>
 
 </html>

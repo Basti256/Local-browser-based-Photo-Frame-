@@ -99,6 +99,9 @@ def log_request(method: str, path: str, status: int) -> None:
     p = (path or "").split("?", 1)[0]
     if p.startswith("/static/") or p.startswith("/.well-known/"):
         return
+    name = p.rsplit("/", 1)[-1]
+    if "/media/" in p and name.lower().endswith(".txt") and status in (204, 404):
+        return
     level = "DEBUG"
     if status >= 500:
         level = "ERROR"

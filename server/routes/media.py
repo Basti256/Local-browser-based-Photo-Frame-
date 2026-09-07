@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from server.project import require_paths, safe_join
 
@@ -22,6 +22,8 @@ def serve_media(filename: str):
     original = safe_join(paths.media, filename)
     if original and original.is_file():
         return _file_response(original)
+    if filename.lower().endswith(".txt"):
+        return Response(status_code=204)
     raise HTTPException(status_code=404, detail="Datei nicht gefunden.")
 
 

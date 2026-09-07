@@ -4,6 +4,31 @@ Alle wesentlichen Änderungen am Local-browser-based-Photo-Frame werden in diese
 
 ---
 
+## [2.20.6] – 2026-09-07
+
+### Behoben
+
+- Wall: Verbindungsindikator (rot ohne Server, grün verbunden) bleibt oben rechts am Bildschirm, auch bei gedrehter Anzeige. Offline-Punkt verschwindet nicht mehr durch den Ausblend-Timer nach dem Verbinden.
+
+---
+
+## [2.20.5] – 2026-09-07
+
+### Geändert
+
+- Fly-Bahnen: gleichmäßiger füllen (wenig genutzte Bahnen zuerst). Nicht zweimal hintereinander dieselbe Bahn, kein ständiges Wechseln zweier Bahnen (A-B-A).
+- Debug-Overlay: Drehung (0°/90°/180°/270°) nur für diese Sitzung erzwingen, unabhängig von der Config.
+
+---
+
+## [2.20.4] – 2026-09-07
+
+### Behoben
+
+- Protokoll: fehlender Bildtext (`/media/<stem>.txt`) ist kein WARNING-404 mehr. Die Wall fragt die Datei bei jedem Foto; ohne Text kommt 204.
+
+---
+
 ## [2.20.3] – 2026-09-07
 
 ### Behoben

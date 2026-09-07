@@ -105,8 +105,87 @@
     };
   }
 
+  var OVERRIDE_KEY = "pfDebugWallRotate";
+  var lastRotateCfg = {};
+
+  function readOverride() {
+    try {
+      var v = global.sessionStorage.getItem(OVERRIDE_KEY);
+      if (v == null || v === "") return null;
+      return clampRot(v);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function writeOverride(value) {
+    try {
+      global.sessionStorage.setItem(OVERRIDE_KEY, String(clampRot(value)));
+    } catch (e) {}
+  }
+
+  function clearOverride() {
+    try { global.sessionStorage.removeItem(OVERRIDE_KEY); } catch (e) {}
+  }
+
+  function syncDebugWallRotate(cfg) {
+    if (cfg) lastRotateCfg = cfg;
+    var debugOn = !!(lastRotateCfg && lastRotateCfg.debug_overlay);
+    var configRot = clampRot(lastRotateCfg && lastRotateCfg.wall_display_rotation);
+    var bar = document.getElementById("debugWallRotate");
+    if (!debugOn) {
+      if (bar) bar.style.display = "none";
+      return;
+    }
+    if (!bar) {
+      bar = document.createElement("div");
+      bar.id = "debugWallRotate";
+      var lab = document.createElement("label");
+      lab.setAttribute("for", "debugWallRotateSel");
+      lab.textContent = "Debug drehen";
+      var sel = document.createElement("select");
+      sel.id = "debugWallRotateSel";
+      sel.setAttribute("aria-label", "Debug-Drehung, unabhängig von der Config");
+      [
+        [0, "Horizontal (0°)"],
+        [90, "Porträt (90°)"],
+        [180, "Horizontal gedreht (180°)"],
+        [270, "Porträt gedreht (270°)"]
+      ].forEach(function (opt) {
+        var o = document.createElement("option");
+        o.value = String(opt[0]);
+        o.textContent = opt[1];
+        sel.appendChild(o);
+      });
+      sel.addEventListener("change", function () {
+        writeOverride(sel.value);
+        applyWallDisplayRotation(lastRotateCfg);
+      });
+      var hint = document.createElement("span");
+      hint.className = "debugWallRotateHint";
+      bar.appendChild(lab);
+      bar.appendChild(sel);
+      bar.appendChild(hint);
+      document.body.appendChild(bar);
+    }
+    var selEl = document.getElementById("debugWallRotateSel");
+    var hintEl = bar.querySelector(".debugWallRotateHint");
+    if (hintEl) hintEl.textContent = "Config " + configRot + "°";
+    if (selEl && document.activeElement !== selEl) selEl.value = String(rotation);
+    bar.style.display = "flex";
+  }
+
   function applyWallDisplayRotation(cfg) {
-    var next = clampRot(cfg && cfg.wall_display_rotation);
+    if (cfg) lastRotateCfg = cfg;
+    var debugOn = !!(cfg && cfg.debug_overlay);
+    var configRot = clampRot(cfg && cfg.wall_display_rotation);
+    var next = configRot;
+    if (debugOn) {
+      var ov = readOverride();
+      if (ov !== null) next = ov;
+    } else {
+      clearOverride();
+    }
     if (applied && next !== rotation) {
       rotation = next;
       applyClass();
@@ -116,6 +195,7 @@
     rotation = next;
     applyClass();
     applied = true;
+    syncDebugWallRotate(cfg);
   }
 
   rotation = 0;
@@ -132,4 +212,5 @@
   global.wallMount = wallMount;
   global.wallDisplayRotation = function () { return rotation; };
   global.applyWallDisplayRotation = applyWallDisplayRotation;
+  global.syncDebugWallRotate = syncDebugWallRotate;
 })(window);

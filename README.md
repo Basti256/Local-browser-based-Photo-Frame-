@@ -1,6 +1,6 @@
 # Local-browser-based-Photo-Frame
 
-**Version 2.20.3**
+**Version 2.20.6**
 
 Browserbasierter Foto-Rahmen: Gäste laden Bilder und Videos über eine Upload-Seite. Eine Wall zeigt die Medien in Echtzeit. Die Einrichtung liegt unter `/setup` (Konto **Admin**). Die Wand-Einstellungen unter `/admin` sind per Projekt-PIN geschützt.
 
