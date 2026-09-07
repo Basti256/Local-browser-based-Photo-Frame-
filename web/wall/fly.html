@@ -848,6 +848,7 @@ async function loadConfig(){
 
 let res=await fetch("/api/config")
 config=await res.json()
+if(window.applyWallDisplayRotation) applyWallDisplayRotation(config)
 spawnLaneCursor=-1
 burstOriginTime=Date.now()
 stopBurstDebug()

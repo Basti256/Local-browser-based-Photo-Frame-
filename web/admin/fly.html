@@ -557,6 +557,26 @@ Hintergrund
 </div>
 
 
+<!-- Spezial -->
+
+<div class="section">
+<div class="sectionHeader" onclick="toggleSection(this)">
+Spezial
+<span>▼</span>
+</div>
+<div class="sectionContent">
+<div class="sectionInfo">Dreht die gesamte Wall. Für Geräte, die selbst keinen Hochkant-Bildschirm können.</div>
+<label>Anzeige drehen</label>
+<select id="wall_display_rotation">
+<option value="0">Horizontal (0°)</option>
+<option value="90">Porträt (90°)</option>
+<option value="180">Horizontal gedreht (180°)</option>
+<option value="270">Porträt gedreht (270°)</option>
+</select>
+</div>
+</div>
+
+
 </div>
 <div class="tabPanel" data-tab="text">
 
@@ -1176,6 +1196,11 @@ config=await res.json()
 wall_view_mode.value=config.wall_view_mode||"fly"
 document.getElementById("grid_settings").style.display=(config.wall_view_mode||"fly")==="grid"?"block":"none"
 wall_view_mode.onchange=function(){ document.getElementById("grid_settings").style.display=wall_view_mode.value==="grid"?"block":"none" }
+let wallRotEl=document.getElementById("wall_display_rotation")
+if(wallRotEl){
+let wr=parseInt(config.wall_display_rotation,10)
+wallRotEl.value=String([0,90,180,270].indexOf(wr)>=0?wr:0)
+}
 grid_columns.value=config.grid_columns||4
 grid_animation_duration.value=config.grid_animation_duration||config.grid_interval||8
 grid_spacing_columns.value=config.grid_spacing_columns||config.grid_spacing_rows||20
@@ -1342,6 +1367,11 @@ let res=await fetch("/api/config")
 let config=await res.json()
 
 config.wall_view_mode = wall_view_mode.value
+let wallRotSave=document.getElementById("wall_display_rotation")
+if(wallRotSave){
+let wr=parseInt(wallRotSave.value,10)
+config.wall_display_rotation=[0,90,180,270].indexOf(wr)>=0?wr:0
+}
 config.grid_columns = toInt(grid_columns.value, config.grid_columns || 4)
 config.grid_animation_duration = toFloat(grid_animation_duration.value, config.grid_animation_duration || config.grid_interval || 8)
 config.grid_spacing_columns = toInt(grid_spacing_columns.value, config.grid_spacing_columns || config.grid_spacing_rows || 20)

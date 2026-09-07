@@ -128,6 +128,20 @@ button{background:#4CAF50;color:white;border:none;padding:15px;font-size:18px;bo
 </div>
 
 <div class="section">
+<div class="sectionHeader" onclick="toggleSection(this)">Spezial <span>▼</span></div>
+<div class="sectionContent">
+<div class="sectionInfo">Dreht die gesamte Wall. Für Geräte, die selbst keinen Hochkant-Bildschirm können.</div>
+<label>Anzeige drehen</label>
+<select id="wall_display_rotation">
+<option value="0">Horizontal (0°)</option>
+<option value="90">Porträt (90°)</option>
+<option value="180">Horizontal gedreht (180°)</option>
+<option value="270">Porträt gedreht (270°)</option>
+</select>
+</div>
+</div>
+
+<div class="section">
 <div class="sectionHeader" onclick="toggleSection(this)">QR Code <span>▼</span></div>
 <div class="sectionContent">
 <div class="row"><label>QR Code anzeigen</label><input type="checkbox" id="qr_show" class="checkbox"></div>
@@ -408,6 +422,11 @@ let res=await fetch("/api/config")
 config=await res.json()
 
 wall_view_mode.value=config.wall_view_mode||"grid"
+let wallRotEl=document.getElementById("wall_display_rotation")
+if(wallRotEl){
+let wr=parseInt(config.wall_display_rotation,10)
+wallRotEl.value=String([0,90,180,270].indexOf(wr)>=0?wr:0)
+}
 
 grid_columns.value=config.grid_columns||4
 grid_animation_duration.value=config.grid_animation_duration||config.grid_interval||8
@@ -497,6 +516,11 @@ let res=await fetch("/api/config")
 let cfg=await res.json()
 
 cfg.wall_view_mode=wall_view_mode.value
+let wallRotSave=document.getElementById("wall_display_rotation")
+if(wallRotSave){
+let wr=parseInt(wallRotSave.value,10)
+cfg.wall_display_rotation=[0,90,180,270].indexOf(wr)>=0?wr:0
+}
 cfg.grid_columns=toInt(grid_columns.value,cfg.grid_columns||4)
 cfg.grid_animation_duration=toFloat(grid_animation_duration.value,cfg.grid_animation_duration||cfg.grid_interval||8)
 cfg.grid_spacing_columns=toInt(grid_spacing_columns.value,cfg.grid_spacing_columns||cfg.grid_spacing_rows||20)

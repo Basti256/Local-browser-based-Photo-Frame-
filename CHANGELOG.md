@@ -4,6 +4,14 @@ Alle wesentlichen Änderungen am Local-browser-based-Photo-Frame werden in diese
 
 ---
 
+## [2.20.1] – 2026-09-07
+
+### Geändert
+
+- Wall-Drehung (0° / 90° / 180° / 270°) unter `/admin` Wand → Spezial, in der Projekt-Config. Keine Auswahl mehr auf der Wall selbst.
+
+---
+
 ## [2.20.0] – 2026-09-07
 
 ### Neu

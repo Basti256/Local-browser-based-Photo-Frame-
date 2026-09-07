@@ -1,29 +1,14 @@
 (function (global) {
   "use strict";
 
-  var KEY = "pfWallRotate";
   var ANGLES = [0, 90, 180, 270];
   var CLASSES = ["wall-rot-0", "wall-rot-90", "wall-rot-180", "wall-rot-270"];
   var rotation = 0;
+  var applied = false;
 
   function clampRot(value) {
     var n = parseInt(value, 10);
     return ANGLES.indexOf(n) >= 0 ? n : 0;
-  }
-
-  function loadRot() {
-    try {
-      return clampRot(global.localStorage.getItem(KEY));
-    } catch (e) {
-      return 0;
-    }
-  }
-
-  function saveRot(value) {
-    rotation = clampRot(value);
-    try {
-      global.localStorage.setItem(KEY, String(rotation));
-    } catch (e) {}
   }
 
   function applyClass() {
@@ -94,49 +79,25 @@
     };
   }
 
-  function buildBar() {
-    if (document.getElementById("wallRotateBar")) return;
-    var bar = document.createElement("div");
-    bar.id = "wallRotateBar";
-    var lab = document.createElement("label");
-    lab.setAttribute("for", "wallRotate");
-    lab.textContent = "Anzeige";
-    var sel = document.createElement("select");
-    sel.id = "wallRotate";
-    sel.setAttribute("aria-label", "Anzeige drehen");
-    [
-      [0, "Horizontal (0°)"],
-      [90, "Porträt (90°)"],
-      [180, "Horizontal gedreht (180°)"],
-      [270, "Porträt gedreht (270°)"]
-    ].forEach(function (opt) {
-      var o = document.createElement("option");
-      o.value = String(opt[0]);
-      o.textContent = opt[1];
-      sel.appendChild(o);
-    });
-    sel.value = String(rotation);
-    sel.addEventListener("change", function () {
-      saveRot(sel.value);
+  function applyWallDisplayRotation(cfg) {
+    var next = clampRot(cfg && cfg.wall_display_rotation);
+    if (applied && next !== rotation) {
+      rotation = next;
       applyClass();
       global.location.reload();
-    });
-    bar.appendChild(lab);
-    bar.appendChild(sel);
-    document.body.appendChild(bar);
+      return;
+    }
+    rotation = next;
+    applyClass();
+    applied = true;
   }
 
-  rotation = loadRot();
+  rotation = 0;
   applyClass();
 
   global.wallInnerWidth = wallInnerWidth;
   global.wallInnerHeight = wallInnerHeight;
   global.wallClientRect = wallClientRect;
   global.wallDisplayRotation = function () { return rotation; };
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", buildBar);
-  } else {
-    buildBar();
-  }
+  global.applyWallDisplayRotation = applyWallDisplayRotation;
 })(window);

@@ -140,6 +140,16 @@ def get_config():
 
 @router.post("/api/config")
 async def save_config(config: dict, _project: str = Depends(require_admin_pin)):
+    paths = get_paths()
+    old = load_project_config(paths) if paths else {}
+    try:
+        old_rot = int(old.get("wall_display_rotation") or 0)
+    except (TypeError, ValueError):
+        old_rot = 0
     merged, view_changed = merge_project_config(config)
-    await broadcast_config(reload_full=view_changed)
+    try:
+        new_rot = int(merged.get("wall_display_rotation") or 0)
+    except (TypeError, ValueError):
+        new_rot = 0
+    await broadcast_config(reload_full=view_changed or old_rot != new_rot)
     return {"status": "saved", "view_changed": view_changed}

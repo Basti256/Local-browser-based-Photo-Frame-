@@ -85,6 +85,7 @@ DEFAULT_CONFIG = {
     "debug_random_comments": False,
     "screen_wake_lock_enabled": False,
     "screen_wake_lock_alternative": False,
+    "wall_display_rotation": 0,
     "upload_greeting": "Lade deine Fotos hoch",
     "upload_greeting_align": "center",
     "upload_greeting_font": "Arial",
@@ -265,6 +266,16 @@ def migrate_config(config: dict) -> tuple[dict, bool]:
         hrot = 0
     if config.get("upload_image_rotation") != hrot:
         config["upload_image_rotation"] = hrot
+        changed = True
+    try:
+        drot = int(config.get("wall_display_rotation") or 0)
+    except (TypeError, ValueError):
+        drot = 0
+    drot = ((drot // 90) * 90) % 360
+    if drot not in (0, 90, 180, 270):
+        drot = 0
+    if config.get("wall_display_rotation") != drot:
+        config["wall_display_rotation"] = drot
         changed = True
     for key, lo, hi in (
         ("background_brightness", 20, 180),

@@ -1,6 +1,6 @@
 # Local-browser-based-Photo-Frame
 
-**Version 2.20.0**
+**Version 2.20.1**
 
 Browserbasierter Foto-Rahmen: Gäste laden Bilder und Videos über eine Upload-Seite. Eine Wall zeigt die Medien in Echtzeit. Die Einrichtung liegt unter `/setup` (Konto **Admin**). Die Wand-Einstellungen unter `/admin` sind per Projekt-PIN geschützt.
 
@@ -104,7 +104,7 @@ Danach den Server neu starten (`./start.sh` / `start.bat`, oder `sudo systemctl 
 - Medienspeicher serverweit (Ordner mit Unterverzeichnis je Projekt) oder im jeweiligen Projektordner
 - QR-Code zur Upload-Seite gemäß Projekt-Netzwerkmodus
 - PIN-geschützter Medienbrowser: Mehrfachauswahl, Verstecken, Löschen, ZIP-Download
-- Wall: Fly-Modus und Grid-Modus; Anzeige am Gerät drehbar (0°/90°/180°/270°), wenn das Gerät keinen Hochkant-Bildschirm kann; Admin mit Reitern, vorherige Ansicht unter `/admin/classic`; Fly-Spawn Bahnen, Burst oder Zufall
+- Wall: Fly-Modus und Grid-Modus; Anzeige drehbar (0°/90°/180°/270°) unter `/admin` Wand → Spezial, wenn das Gerät keinen Hochkant-Bildschirm kann; Admin mit Reitern, vorherige Ansicht unter `/admin/classic`; Fly-Spawn Bahnen, Burst oder Zufall
 - Upload-Seite: mehrzeilige Begrüßung, Header-Bild mit Upload und Drehung
 - WebSocket-Aktualisierung bei Uploads
 - Serverseitiges Bild-Skalieren; Videos mit ffmpeg nach H.264/AAC

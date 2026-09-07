@@ -29,37 +29,3 @@ html.wall-rot-0 #wallStage{transform:translate(-50%,-50%) rotate(0deg)}
 html.wall-rot-90 #wallStage{transform:translate(-50%,-50%) rotate(90deg)}
 html.wall-rot-180 #wallStage{transform:translate(-50%,-50%) rotate(180deg)}
 html.wall-rot-270 #wallStage{transform:translate(-50%,-50%) rotate(270deg)}
-#wallRotateBar{
-position:fixed;
-right:12px;
-bottom:12px;
-z-index:100000;
-display:flex;
-align-items:center;
-gap:8px;
-padding:8px 10px;
-border-radius:10px;
-background:rgba(0,0,0,0.55);
-color:#fff;
-font:14px/1.2 system-ui, Arial, sans-serif;
-opacity:0.4;
-transition:opacity 0.2s;
-pointer-events:auto;
-}
-#wallRotateBar:hover,
-#wallRotateBar:focus-within{
-opacity:1;
-}
-#wallRotateBar label{
-white-space:nowrap;
-}
-#wallRotate{
-font:14px/1.2 system-ui, Arial, sans-serif;
-min-height:32px;
-max-width:min(72vw, 280px);
-border:0;
-border-radius:6px;
-padding:4px 6px;
-background:#fff;
-color:#111;
-}

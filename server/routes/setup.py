@@ -469,7 +469,10 @@ async def api_apply_template(name: str, body: ApplyTemplateBody, _user: str = De
     if runner.is_running(name):
         from server.routes.wall import broadcast_config
         await broadcast_config(
-            reload_full=old.get("wall_view_mode") != new.get("wall_view_mode"),
+            reload_full=(
+                old.get("wall_view_mode") != new.get("wall_view_mode")
+                or old.get("wall_display_rotation") != new.get("wall_display_rotation")
+            ),
             project=name,
         )
     log("INFO", f"Vorlage auf {name} angewendet")

@@ -295,6 +295,7 @@ ws.onmessage=async(event)=>{
 if(event.data==="__config_reload__"){ location.reload(); return }
 if(event.data==="__config_updated__"){
 let r=await fetch("/api/config"); config=await r.json()
+if(window.applyWallDisplayRotation) applyWallDisplayRotation(config)
 applyBackground()
 loadCommentFont()
 applyWakeLock()
@@ -607,6 +608,7 @@ connectWebSocket()
 
 let cfgRes=await fetch("/api/config")
 config=await cfgRes.json()||{}
+if(window.applyWallDisplayRotation) applyWallDisplayRotation(config)
 
 applyBackground()
 loadCommentFont()
