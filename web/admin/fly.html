@@ -531,7 +531,7 @@ Hintergrund
 </select>
 <div id="background_image_preview" class="bgPreview"><img alt=""></div>
 <div class="bgTools">
-<p class="bgHint">Vorschau wie auf der Wall. 100 % Größe = Bild füllt den Bildschirm.</p>
+<p class="bgHint">Vorschau zeigt das ganze Bild, höchstens 300 Pixel hoch. Position und Größe gelten auf der Wand.</p>
 <input type="hidden" id="background_rotation" value="0">
 <div class="bgRotate">
 <button type="button" id="background_rotate_left">90° nach links</button>
@@ -744,9 +744,6 @@ Text, den Gäste beim Hochladen zu Fotos eingeben können. Wird unter dem Bild a
 <label>Schriftgröße (px)</label>
 <input id="comment_size" placeholder="22" type="number">
 
-<label>Max. Zeichen pro Kommentar</label>
-<input id="comment_max_length" placeholder="80" type="number">
-
 <div class="row">
 <label>Fett</label>
 <input type="checkbox" id="comment_bold" class="checkbox">
@@ -839,13 +836,20 @@ Debug
 <div class="sectionContent">
 
 <div id="help_debug" class="sectionInfo">
-Zeigt ein technisches Overlay mit Status-Informationen zur Wand und die Spawn-Bahnen als Linien (nur für Fehlersuche).
+Zeigt ein technisches Overlay mit Status-Informationen zur Wand und die Spawn-Bahnen als Linien (nur für Fehlersuche). Zufällige Bildtexte helfen beim Testen der Beschriftung unter den Fotos.
 </div>
 
 <div class="row">
 <label>Debug Overlay anzeigen</label>
 <input type="checkbox" id="debug_overlay" class="checkbox">
 </div>
+
+<label>Zufällige Bildtexte beim Upload</label>
+<select id="debug_random_comments">
+<option value="0">Aus</option>
+<option value="1">An</option>
+</select>
+<p class="bgHint">Nur zum Testen. Leere Kommentare werden beim Hochladen mit Quatsch, Smileys und Symbolen gefüllt, bis zum Zeichenlimit.</p>
 
 </div>
 </div>
@@ -1000,6 +1004,10 @@ Einstellungen für die Upload-Seite, auf die Gäste über den QR-Code zugreifen.
 <label>Max. Dateigröße (MB)</label>
 <input id="upload_max_file_size_mb" placeholder="50" type="number">
 
+<label>Max. Zeichen pro Kommentar</label>
+<input id="comment_max_length" placeholder="80" type="number" min="1" max="500">
+<p class="bgHint">Begrenzt das Kommentarfeld auf der Upload-Seite. Nach dem Speichern gilt der Wert dort sofort, auch ohne die Seite neu zu laden.</p>
+
 </div>
 </div>
 
@@ -1114,7 +1122,7 @@ let files=await res.json()
 for(let f of files){
 let opt=document.createElement("option")
 opt.value=f
-opt.textContent=f
+opt.textContent=window.backgroundOptionLabel?backgroundOptionLabel(f):f
 sel.appendChild(opt)
 }
 if(cur) sel.value=cur
@@ -1304,6 +1312,7 @@ upload_max_files.value=config.upload_max_files || 20
 upload_max_file_size_mb.value=config.upload_max_file_size_mb || 50
 
 debug_overlay.checked=config.debug_overlay || false
+debug_random_comments.value=config.debug_random_comments ? "1" : "0"
 let screenWakeLockEl=document.getElementById("screen_wake_lock")
 if(screenWakeLockEl) screenWakeLockEl.checked=config.screen_wake_lock_enabled || false
 let screenWakeLockAltEl=document.getElementById("screen_wake_lock_alternative")
@@ -1440,7 +1449,7 @@ config.comments_enabled=comments_enabled.checked
 config.comment_color=comment_color.value || "#e51515"
 config.comment_font=comment_font.value || "Pacifico"
 config.comment_size=toInt(comment_size.value, config.comment_size || 22)
-config.comment_max_length=toInt(comment_max_length.value, config.comment_max_length || 80)
+config.comment_max_length=Math.max(1, Math.min(500, toInt(comment_max_length.value, config.comment_max_length || 80)))
 config.comment_bold=comment_bold.checked
 config.comment_underline=comment_underline.checked
 
@@ -1460,6 +1469,7 @@ config.upload_max_files=toInt(upload_max_files.value, config.upload_max_files ||
 config.upload_max_file_size_mb=toInt(upload_max_file_size_mb.value, config.upload_max_file_size_mb || 50)
 
 config.debug_overlay=debug_overlay.checked
+config.debug_random_comments=debug_random_comments.value==="1"
 let screenWakeLockCb=document.getElementById("screen_wake_lock")
 config.screen_wake_lock_enabled=screenWakeLockCb?screenWakeLockCb.checked:false
 let screenWakeLockAltCb=document.getElementById("screen_wake_lock_alternative")

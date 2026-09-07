@@ -75,6 +75,36 @@
       ") contrast(" + clamp(cfg.background_contrast, 20, 180, 100) / 100 + ")";
   }
 
+  var PREVIEW_MAX_H = 300;
+
+  function layoutPreview(root, cfg, img) {
+    var box = root.getBoundingClientRect();
+    var W = box.width;
+    var nw = img.naturalWidth;
+    var nh = img.naturalHeight;
+    if (!nw || !nh || W < 2) return;
+    var rot = normRot(cfg.background_rotation);
+    var swapped = rot === 90 || rot === 270;
+    var visW = swapped ? nh : nw;
+    var visH = swapped ? nw : nh;
+    var s = Math.min(1, PREVIEW_MAX_H / visH, W / visW);
+    var dw = visW * s;
+    var dh = visH * s;
+    root.style.height = Math.round(dh) + "px";
+    img.style.position = "absolute";
+    img.style.width = nw * s + "px";
+    img.style.height = nh * s + "px";
+    img.style.maxWidth = "none";
+    img.style.maxHeight = "none";
+    img.style.left = "50%";
+    img.style.top = "50%";
+    img.style.transform = "translate(-50%,-50%) rotate(" + rot + "deg)";
+    img.style.opacity = String(clamp(cfg.background_opacity, 0, 100, 100) / 100);
+    img.style.filter =
+      "brightness(" + clamp(cfg.background_brightness, 20, 180, 100) / 100 +
+      ") contrast(" + clamp(cfg.background_contrast, 20, 180, 100) / 100 + ")";
+  }
+
   function applyWallBackground(root, cfg) {
     if (!root) return;
     cfg = cfg || {};
@@ -93,7 +123,7 @@
       return;
     }
     img.style.display = "block";
-    var src = (global.pfUrl ? global.pfUrl("/background/" + encodeURIComponent(cfg.background_image)) : ("/background/" + encodeURIComponent(cfg.background_image)));
+    var src = backgroundUrl(cfg.background_image);
     function run() {
       layout(root, cfg, img);
     }
@@ -116,8 +146,41 @@
 
   function refreshPreview() {
     var prev = document.getElementById("background_image_preview");
-    if (!prev || !global.applyWallBackground) return;
-    applyWallBackground(prev, readSettings());
+    if (!prev) return;
+    var cfg = readSettings();
+    prev.style.backgroundColor = cfg.background_color || "#000000";
+    var img = prev.querySelector("img");
+    if (!img) {
+      img = document.createElement("img");
+      img.alt = "";
+      prev.appendChild(img);
+    }
+    var useImage = cfg.background_mode === "image" && cfg.background_image;
+    if (!useImage) {
+      img.style.display = "none";
+      img.removeAttribute("src");
+      prev.style.height = "";
+      updateToolLabels();
+      return;
+    }
+    img.style.display = "block";
+    var src = backgroundUrl(cfg.background_image);
+    function run() {
+      layoutPreview(prev, cfg, img);
+    }
+    img.onload = run;
+    if (img.getAttribute("src") === src && img.complete && img.naturalWidth) run();
+    else img.src = src;
+    if (!prev._bgRo && typeof ResizeObserver !== "undefined") {
+      prev._bgRo = new ResizeObserver(function () {
+        if (img.naturalWidth) layoutPreview(prev, readSettings(), img);
+      });
+      prev._bgRo.observe(prev);
+    }
+    updateToolLabels();
+  }
+
+  function updateToolLabels() {
     var b = document.getElementById("background_brightness");
     var c = document.getElementById("background_contrast");
     var s = document.getElementById("background_scale");
@@ -168,11 +231,27 @@
     if (right) right.addEventListener("click", function () { rotateBy(90); });
   }
 
+  function backgroundUrl(name) {
+    name = String(name || "");
+    var path;
+    if (name.indexOf("shared:") === 0) {
+      path = "/background/shared/" + encodeURIComponent(name.slice(7));
+    } else {
+      path = "/background/" + encodeURIComponent(name);
+    }
+    return global.pfUrl ? global.pfUrl(path) : path;
+  }
+
   global.applyWallBackground = applyWallBackground;
   global.backgroundSettingsFromForm = readSettings;
   global.fillBackgroundForm = fillForm;
   global.initBackgroundAdmin = initAdmin;
   global.refreshBackgroundPreview = refreshPreview;
+  global.backgroundOptionLabel = function (name) {
+    name = String(name || "");
+    if (name.indexOf("shared:") === 0) return name.slice(7) + " (serverweit)";
+    return name;
+  };
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", initAdmin);

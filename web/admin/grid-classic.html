@@ -102,7 +102,7 @@ button{background:#4CAF50;color:white;border:none;padding:15px;font-size:18px;bo
 </select>
 <div id="background_image_preview" class="bgPreview"><img alt=""></div>
 <div class="bgTools">
-<p class="bgHint">Vorschau wie auf der Wall. 100 % Größe = Bild füllt den Bildschirm.</p>
+<p class="bgHint">Vorschau zeigt das ganze Bild, höchstens 300 Pixel hoch. Position und Größe gelten auf der Wand.</p>
 <input type="hidden" id="background_rotation" value="0">
 <div class="bgRotate">
 <button type="button" id="background_rotate_left">90° nach links</button>
@@ -183,7 +183,6 @@ button{background:#4CAF50;color:white;border:none;padding:15px;font-size:18px;bo
 <select id="comment_font"></select>
 <div id="comment_font_sample" aria-hidden="true"></div>
 <label>Schriftgröße (px)</label><input id="comment_size" placeholder="22" type="number">
-<label>Max. Zeichen pro Kommentar</label><input id="comment_max_length" placeholder="80" type="number">
 <div class="row"><label>Fett</label><input type="checkbox" id="comment_bold" class="checkbox"></div>
 <div class="row"><label>Unterstrichen</label><input type="checkbox" id="comment_underline" class="checkbox"></div>
 </div>
@@ -216,6 +215,12 @@ button{background:#4CAF50;color:white;border:none;padding:15px;font-size:18px;bo
 <div class="sectionContent">
 <div class="sectionInfo">Zeigt ein technisches Overlay mit Status-Informationen zur Wand.</div>
 <div class="row"><label>Debug Overlay anzeigen</label><input type="checkbox" id="debug_overlay" class="checkbox"></div>
+<label>Zufällige Bildtexte beim Upload</label>
+<select id="debug_random_comments">
+<option value="0">Aus</option>
+<option value="1">An</option>
+</select>
+<div class="helpText">Nur zum Testen. Leere Kommentare werden beim Hochladen mit Quatsch, Smileys und Symbolen gefüllt, bis zum Zeichenlimit.</div>
 </div>
 </div>
 
@@ -263,6 +268,8 @@ button{background:#4CAF50;color:white;border:none;padding:15px;font-size:18px;bo
 <input id="upload_max_files" placeholder="20" type="number">
 <label>Max. Dateigröße (MB)</label>
 <input id="upload_max_file_size_mb" placeholder="50" type="number">
+<label>Max. Zeichen pro Kommentar</label><input id="comment_max_length" placeholder="80" type="number" min="1" max="500">
+<div class="helpText">Begrenzt das Kommentarfeld auf der Upload-Seite. Nach dem Speichern gilt der Wert dort sofort.</div>
 </div>
 </div>
 
@@ -362,7 +369,7 @@ sel.innerHTML='<option value="">– Bild auswählen –</option>'
 try{
 let res=await fetch("/api/background/list")
 let files=await res.json()
-for(let f of files){let o=document.createElement("option");o.value=f;o.textContent=f;sel.appendChild(o)}
+for(let f of files){let o=document.createElement("option");o.value=f;o.textContent=window.backgroundOptionLabel?backgroundOptionLabel(f):f;sel.appendChild(o)}
 if(cur) sel.value=cur
 }catch(e){}
 }
@@ -475,6 +482,7 @@ upload_max_files.value=config.upload_max_files||20
 upload_max_file_size_mb.value=config.upload_max_file_size_mb||50
 
 debug_overlay.checked=config.debug_overlay||false
+debug_random_comments.value=config.debug_random_comments?"1":"0"
 let swl=document.getElementById("screen_wake_lock");if(swl) swl.checked=config.screen_wake_lock_enabled||false
 let swlAlt=document.getElementById("screen_wake_lock_alternative");if(swlAlt) swlAlt.checked=config.screen_wake_lock_alternative||false
 cache_enabled.checked=config.cache_enabled||false
@@ -540,7 +548,7 @@ cfg.comments_enabled=comments_enabled.checked
 cfg.comment_color=comment_color.value||"#e51515"
 cfg.comment_font=comment_font.value||"Pacifico"
 cfg.comment_size=toInt(comment_size.value,cfg.comment_size||22)
-cfg.comment_max_length=toInt(comment_max_length.value,cfg.comment_max_length||80)
+cfg.comment_max_length=Math.max(1, Math.min(500, toInt(comment_max_length.value,cfg.comment_max_length||80)))
 cfg.comment_bold=comment_bold.checked
 cfg.comment_underline=comment_underline.checked
 
@@ -558,6 +566,7 @@ cfg.upload_max_files=toInt(upload_max_files.value,cfg.upload_max_files||20)
 cfg.upload_max_file_size_mb=toInt(upload_max_file_size_mb.value,cfg.upload_max_file_size_mb||50)
 
 cfg.debug_overlay=debug_overlay.checked
+cfg.debug_random_comments=debug_random_comments.value==="1"
 let swlCb=document.getElementById("screen_wake_lock");cfg.screen_wake_lock_enabled=swlCb?swlCb.checked:false
 let swlAltCb=document.getElementById("screen_wake_lock_alternative");cfg.screen_wake_lock_alternative=swlAltCb?swlAltCb.checked:false
 cfg.cache_enabled=cache_enabled.checked

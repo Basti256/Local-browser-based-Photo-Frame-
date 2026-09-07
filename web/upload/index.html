@@ -7,6 +7,7 @@
 <script src="/static/comment-fonts.js"></script>
 <script src="/static/simple-md.js"></script>
 <script src="/static/header.js"></script>
+<script src="/static/debug-comments.js"></script>
 <style>
 body{font-family:system-ui;background:#f5f7fb;margin:0;padding:0;text-align:center;}
 .greeting{margin:0 0 16px 0;overflow-wrap:anywhere;word-wrap:break-word;line-height:1.25;}
@@ -26,6 +27,7 @@ body{font-family:system-ui;background:#f5f7fb;margin:0;padding:0;text-align:cent
 .preview{position:relative;width:150px;background:#fafafa;padding:10px;border-radius:10px;box-shadow:0 3px 10px rgba(0,0,0,0.08);}
 .preview img,.preview video{width:100%;border-radius:8px;display:block;}
 .comment-hint{font-size:12px;color:#c00;margin-top:16px;margin-bottom:8px;}
+.comment-count{font-size:11px;color:#888;margin-top:4px;text-align:right;}
 .removeBtn{position:absolute;top:6px;right:6px;background:#ff4b5c;color:white;border:none;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:14px;line-height:24px;padding:0;}
 textarea{width:100%;height:50px;margin-top:8px;resize:none;border-radius:6px;border:1px solid #ddd;padding:5px;font-size:13px;}
 .upload-btn{margin-top:20px;margin-right:8px;padding:12px 20px;border:none;border-radius:8px;background:#ff4b5c;color:white;font-size:16px;cursor:pointer;}
@@ -58,17 +60,69 @@ let MAX_COMMENT_LENGTH = 80;
 let MAX_FILES = 20;
 let MAX_FILE_SIZE_MB = 50;
 let ALLOW_VIDEOS = true;
+let DEBUG_RANDOM_COMMENTS = false;
 let selectedFiles = [];
 let configLoaded = false;
 
-async function loadUploadConfig(){
-  if(configLoaded) return;
+function clampCommentMax(n){
+  n = parseInt(n, 10);
+  if(!isFinite(n) || n < 1) n = 80;
+  return Math.min(500, n);
+}
+
+function clipUploadComment(text){
+  if(window.clipComment) return clipComment(text, MAX_COMMENT_LENGTH);
+  return String(text || "").slice(0, MAX_COMMENT_LENGTH);
+}
+
+function fillRandomComment(textarea){
+  if(!DEBUG_RANDOM_COMMENTS || !textarea) return;
+  if(String(textarea.value || "").trim()) return;
+  const text = window.generateRandomComment ? generateRandomComment(MAX_COMMENT_LENGTH) : "";
+  if(!text) return;
+  textarea.value = clipUploadComment(text);
+  if(textarea.value.length > textarea.maxLength && textarea.maxLength > 0){
+    textarea.value = textarea.value.slice(0, textarea.maxLength);
+  }
+}
+
+function applyCommentLimitToFields(){
+  document.querySelectorAll("#previewContainer textarea").forEach(ta => {
+    ta.maxLength = MAX_COMMENT_LENGTH;
+    fillRandomComment(ta);
+    ta.value = clipUploadComment(ta.value);
+    if(ta.value.length > ta.maxLength && ta.maxLength > 0) ta.value = ta.value.slice(0, ta.maxLength);
+    const count = ta.parentElement && ta.parentElement.querySelector(".comment-count");
+    if(count) count.textContent = ta.value.length + " / " + MAX_COMMENT_LENGTH;
+  });
+  const hint = document.getElementById("commentHint");
+  if(selectedFiles.length > 0){
+    hint.textContent = "Max. " + MAX_COMMENT_LENGTH + " Zeichen erlaubt";
+    hint.style.display = "block";
+  }
+}
+
+function applyUploadLimits(cfg){
+  MAX_COMMENT_LENGTH = clampCommentMax(cfg.comment_max_length);
+  MAX_FILES = cfg.upload_max_files || 20;
+  MAX_FILE_SIZE_MB = cfg.upload_max_file_size_mb || 50;
+  ALLOW_VIDEOS = cfg.upload_allow_videos !== false;
+  DEBUG_RANDOM_COMMENTS = !!cfg.debug_random_comments;
+  applyCommentLimitToFields();
+}
+
+async function refreshUploadLimits(){
   try{
     const cfg = await (await fetch("/api/config")).json();
-    MAX_COMMENT_LENGTH = cfg.comment_max_length || 80;
-    MAX_FILES = cfg.upload_max_files || 20;
-    MAX_FILE_SIZE_MB = cfg.upload_max_file_size_mb || 50;
-    ALLOW_VIDEOS = cfg.upload_allow_videos !== false;
+    applyUploadLimits(cfg);
+  }catch(e){}
+}
+
+async function loadUploadConfig(){
+  try{
+    const cfg = await (await fetch("/api/config")).json();
+    applyUploadLimits(cfg);
+    if(configLoaded) return;
     const greet = document.getElementById("greeting");
     const raw = cfg.upload_greeting || "Lade deine Fotos hoch";
     greet.innerHTML = (window.simpleMd && simpleMd.mdToHtml) ? simpleMd.mdToHtml(raw) : raw.replace(/</g,"&lt;");
@@ -105,6 +159,9 @@ function heartbeat(){ fetch("/api/upload_heartbeat").catch(()=>{}); }
 loadUploadConfig().then(()=>{});
 heartbeat();
 setInterval(heartbeat, 10000);
+setInterval(refreshUploadLimits, 4000);
+document.addEventListener("visibilitychange", () => { if(!document.hidden) refreshUploadLimits(); });
+window.addEventListener("focus", refreshUploadLimits);
 
 function openCamera(){ document.getElementById("cameraInput").click(); }
 function openVideoCamera(){ document.getElementById("videoInput").click(); }
@@ -149,7 +206,18 @@ function renderPreview(){
     textarea.placeholder = "Kommentar";
     textarea.maxLength = MAX_COMMENT_LENGTH;
     textarea.id = "comment_" + index;
+    const count = document.createElement("div");
+    count.className = "comment-count";
+    count.textContent = "0 / " + MAX_COMMENT_LENGTH;
+    textarea.addEventListener("input", () => {
+      textarea.value = clipUploadComment(textarea.value);
+      if(textarea.value.length > textarea.maxLength && textarea.maxLength > 0) textarea.value = textarea.value.slice(0, textarea.maxLength);
+      count.textContent = textarea.value.length + " / " + MAX_COMMENT_LENGTH;
+    });
+    fillRandomComment(textarea);
+    count.textContent = textarea.value.length + " / " + MAX_COMMENT_LENGTH;
     div.appendChild(textarea);
+    div.appendChild(count);
     container.appendChild(div);
   });
 }
@@ -204,7 +272,8 @@ async function upload(){
     for(let i = 0; i < selectedFiles.length; i++){
       const file = selectedFiles[i];
       const commentField = document.getElementById("comment_" + i);
-      const comment = commentField ? commentField.value : "";
+      if(commentField) fillRandomComment(commentField);
+      const comment = clipUploadComment(commentField ? commentField.value : "");
       await uploadWithProgress(file, comment, pct => updateProgress(pct));
       completed++;
       updateProgress(100);

@@ -10,6 +10,7 @@ from PIL import Image, ImageOps
 from pillow_heif import register_heif_opener
 
 from server import stats
+from server.debug_comments import generate_random_comment
 from server.project import IMAGE_EXT, VIDEO_EXT, load_project_config, require_paths
 from server.routes.wall import broadcast
 from server.transcode import transcode_upload
@@ -132,10 +133,17 @@ async def _do_upload(file: UploadFile, comment: str):
             os.remove(file_path)
             raise HTTPException(status_code=400, detail="Diese Datei ist kein gültiges Video.")
 
-    if comment:
-        max_len = config.get("comment_max_length", 80)
+    try:
+        max_len = int(config.get("comment_max_length", 80))
+    except (TypeError, ValueError):
+        max_len = 80
+    max_len = max(1, min(500, max_len))
+    text = (comment or "").strip()
+    if not text and config.get("debug_random_comments"):
+        text = generate_random_comment(max_len)
+    if text:
         comment_file = paths.media / (os.path.splitext(filename)[0] + ".txt")
-        comment_file.write_text(comment[:max_len], encoding="utf-8")
+        comment_file.write_text("".join(list(text)[:max_len]), encoding="utf-8")
 
     display = transcode_upload(paths, filename, config)
     await broadcast(display)

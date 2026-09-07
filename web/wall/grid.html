@@ -374,17 +374,14 @@ let img=document.createElement("img")
 img.loading="eager"
 img.src=(typeof pfUrl==="function"?pfUrl("/media/"+file):("/media/"+file))
 inner.appendChild(img)
-if(window.attachPhotoComment) attachPhotoComment(inner, file, config)
-let dbg=document.createElement("div")
-dbg.className="frameDebugFilename"
-dbg.textContent=file
-inner.appendChild(dbg)
-
 if(config.grid_show_frames!==false){
+if(window.applyPhotoFramePadding) applyPhotoFramePadding(inner, size, config)
+else{
 let padT=config.frame_padding_top||0
 let padS=config.frame_padding_side||0
 let padB=config.frame_padding_bottom||0
 inner.style.padding=padT+"px "+padS+"px "+padB+"px "+padS+"px"
+}
 inner.style.boxSizing="border-box"
 if(spacingCol>0||spacingRow>0){
 inner.style.boxShadow="0 4px 15px rgba(0,0,0,0.5)"
@@ -392,9 +389,15 @@ inner.style.boxShadow="0 4px 15px rgba(0,0,0,0.5)"
 inner.style.boxShadow="none"
 }
 }else{
+if(window.photoFrameScale) inner.dataset.frameScale=String(photoFrameScale(size))
 inner.style.background="transparent"
 inner.style.boxShadow="none"
 }
+if(window.attachPhotoComment) attachPhotoComment(inner, file, config)
+let dbg=document.createElement("div")
+dbg.className="frameDebugFilename"
+dbg.textContent=file
+inner.appendChild(dbg)
 
 cell.appendChild(inner)
 

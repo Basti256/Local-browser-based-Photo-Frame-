@@ -36,4 +36,9 @@ pre.log{background:#111;border:1px solid #333;border-radius:6px;padding:12px;max
 .proj-urls a{word-break:break-all;}
 .proj-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:8px;}
 .proj-actions button{margin-top:0;}
-.proj-pin{letter-spacing:0.18em;font-size:1.25rem;font-weight:700;}
+.tpl-card{margin:12px 0;padding:12px;}
+.tpl-card p{margin:4px 0;}
+.bg-shared{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px;}
+.bg-shared .thumb{width:160px;background:#111;border:1px solid #333;border-radius:8px;padding:8px;}
+.bg-shared .thumb img{display:block;width:100%;height:90px;object-fit:contain;background:#000;border-radius:4px;}
+.bg-shared .thumb button{margin-top:8px;width:100%;}

@@ -34,9 +34,25 @@ def serve_header(filename: str):
     raise HTTPException(status_code=404, detail="Datei nicht gefunden.")
 
 
+@router.get("/background/shared/{filename}")
+def serve_shared_background(filename: str):
+    require_paths()
+    from server.catalog import shared_background_path
+    path = shared_background_path(filename)
+    if path is None:
+        raise HTTPException(status_code=404, detail="Datei nicht gefunden.")
+    return _file_response(path)
+
+
 @router.get("/background/{filename}")
 def serve_background(filename: str):
     paths = require_paths()
+    from server.catalog import is_shared_background, shared_background_path
+    if is_shared_background(filename):
+        path = shared_background_path(filename)
+        if path is None:
+            raise HTTPException(status_code=404, detail="Datei nicht gefunden.")
+        return _file_response(path)
     path = safe_join(paths.background, filename)
     if path and path.is_file():
         return _file_response(path)

@@ -1,6 +1,6 @@
 # Local-browser-based-Photo-Frame
 
-**Version 2.18.4**
+**Version 2.19.0**
 
 Browserbasierter Foto-Rahmen: Gäste laden Bilder und Videos über eine Upload-Seite. Eine Wall zeigt die Medien in Echtzeit. Die Einrichtung liegt unter `/setup` (Konto **Admin**). Die Wand-Einstellungen unter `/admin` sind per Projekt-PIN geschützt.
 
@@ -100,6 +100,7 @@ Danach den Server neu starten (`./start.sh` / `start.bat`, oder `sudo systemctl 
 ## Funktionen
 
 - Projekte mit eigener Config, Medien, PIN; unter `/{name}/` am Serverport; Start/Stop und Löschen unter `/setup`; Config als ZIP laden/exportieren (`config.json` und Hintergründe)
+- Config-Vorlagen und Standardhintergründe unter `/setup`, nutzbar in allen Projekten
 - Medienspeicher serverweit (Ordner mit Unterverzeichnis je Projekt) oder im jeweiligen Projektordner
 - QR-Code zur Upload-Seite gemäß Projekt-Netzwerkmodus
 - PIN-geschützter Medienbrowser: Mehrfachauswahl, Verstecken, Löschen, ZIP-Download

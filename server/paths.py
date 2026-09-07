@@ -16,3 +16,5 @@ SECRET_FILE = DATA_DIR / "secret.key"
 def ensure_data_dir() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     PROJECTS_DIR.mkdir(parents=True, exist_ok=True)
+    (DATA_DIR / "templates").mkdir(parents=True, exist_ok=True)
+    (DATA_DIR / "shared_backgrounds").mkdir(parents=True, exist_ok=True)

@@ -1,4 +1,4 @@
 """
 Projektversion – zentrale Versionsnummer.
 """
-__version__ = "2.18.4"
+__version__ = "2.19.0"

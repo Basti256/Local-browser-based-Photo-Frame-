@@ -29,6 +29,18 @@ from server.network import (
     sanitize_public_host,
 )
 from server.pin import ensure_project_pin, has_pin, set_pin, wait_seconds_remaining
+from server.catalog import (
+    apply_template,
+    delete_shared_background,
+    delete_template,
+    get_template,
+    list_shared_backgrounds,
+    list_templates,
+    save_shared_background,
+    save_template,
+    shared_background_path,
+    update_template_meta,
+)
 from server.project import (
     IMAGE_EXT,
     ProjectPaths,
@@ -60,6 +72,16 @@ class InitBody(BaseModel):
 
 class ProjectBody(BaseModel):
     name: str
+    template_id: str = ""
+
+
+class TemplateMetaBody(BaseModel):
+    name: str | None = None
+    description: str | None = None
+
+
+class ApplyTemplateBody(BaseModel):
+    template_id: str
 
 
 class RuntimeBody(BaseModel):
@@ -122,6 +144,8 @@ def setup_init(body: InitBody, request: Request):
     try:
         create_user(body.password)
     except HTTPException as e:
+        if e.status_code == 400:
+            raise
         wait = record_failure("init")
         log("WARNING", "Erstkonfiguration fehlgeschlagen")
         if isinstance(e.detail, dict):
@@ -207,7 +231,11 @@ def setup_state(_user: str = Depends(require_user)):
 
 @router.post("/api/projects")
 def api_create_project(body: ProjectBody, _user: str = Depends(require_user)):
+    if body.template_id:
+        get_template(body.template_id)
     paths = create_project(body.name)
+    if body.template_id:
+        apply_template(paths, body.template_id)
     return {
         "ok": True,
         "name": paths.name,
@@ -393,6 +421,91 @@ def api_export_project(name: str, _user: str = Depends(require_user)):
         media_type="application/zip",
         headers={"Content-Disposition": "attachment; filename=\"" + filename + "\""},
     )
+
+
+@router.get("/api/setup/templates")
+def api_list_templates(_user: str = Depends(require_user)):
+    return {"ok": True, "templates": list_templates()}
+
+
+@router.post("/api/setup/templates")
+async def api_create_template(
+    name: str = Form(...),
+    description: str = Form(""),
+    file: UploadFile = File(...),
+    _user: str = Depends(require_user),
+):
+    data = await file.read()
+    if len(data) > _IMPORT_MAX:
+        raise HTTPException(status_code=400, detail="Datei zu groß (max. 25 MB).")
+    incoming, assets = _parse_project_bundle(data, file.filename or "")
+    meta = save_template(name, description, incoming, assets)
+    log("INFO", f"Vorlage gespeichert {meta['id']}")
+    return {"ok": True, "template": meta}
+
+
+@router.patch("/api/setup/templates/{tid}")
+def api_update_template(tid: str, body: TemplateMetaBody, _user: str = Depends(require_user)):
+    meta = update_template_meta(tid, body.name, body.description)
+    return {"ok": True, "template": meta}
+
+
+@router.delete("/api/setup/templates/{tid}")
+def api_delete_template(tid: str, _user: str = Depends(require_user)):
+    delete_template(tid)
+    log("INFO", f"Vorlage gelöscht {tid}")
+    return {"ok": True}
+
+
+@router.post("/api/projects/{name}/apply-template")
+async def api_apply_template(name: str, body: ApplyTemplateBody, _user: str = Depends(require_user)):
+    name = validate_project_name(name)
+    paths = ProjectPaths(name)
+    if not paths.config_file.is_file():
+        raise HTTPException(status_code=404, detail="Projekt nicht gefunden.")
+    old = load_project_config(paths)
+    apply_template(paths, body.template_id)
+    new = load_project_config(paths)
+    if runner.is_running(name):
+        from server.routes.wall import broadcast_config
+        await broadcast_config(
+            reload_full=old.get("wall_view_mode") != new.get("wall_view_mode"),
+            project=name,
+        )
+    log("INFO", f"Vorlage auf {name} angewendet")
+    return {"ok": True, "name": name}
+
+
+@router.get("/api/setup/backgrounds")
+def api_list_shared_backgrounds(_user: str = Depends(require_user)):
+    return {"ok": True, "files": list_shared_backgrounds()}
+
+
+@router.post("/api/setup/backgrounds")
+async def api_upload_shared_background(
+    file: UploadFile = File(...),
+    _user: str = Depends(require_user),
+):
+    data = await file.read()
+    name = save_shared_background(file.filename or "bg.jpg", data)
+    log("INFO", "Standardhintergrund gespeichert")
+    return {"ok": True, "filename": name}
+
+
+@router.get("/api/setup/backgrounds/{filename}")
+def api_get_shared_background(filename: str, _user: str = Depends(require_user)):
+    from fastapi.responses import FileResponse
+    path = shared_background_path(filename)
+    if path is None:
+        raise HTTPException(status_code=404, detail="Hintergrund nicht gefunden.")
+    return FileResponse(path, headers={"Cache-Control": "no-cache"})
+
+
+@router.delete("/api/setup/backgrounds/{filename}")
+def api_delete_shared_background(filename: str, _user: str = Depends(require_user)):
+    delete_shared_background(filename)
+    log("INFO", "Standardhintergrund gelöscht")
+    return {"ok": True}
 
 
 @router.post("/api/runtime")

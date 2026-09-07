@@ -82,6 +82,7 @@ DEFAULT_CONFIG = {
     "cache_max_videos": 20,
     "cache_max_size_mb": 500,
     "debug_overlay": False,
+    "debug_random_comments": False,
     "screen_wake_lock_enabled": False,
     "screen_wake_lock_alternative": False,
     "upload_greeting": "Lade deine Fotos hoch",
@@ -279,5 +280,14 @@ def migrate_config(config: dict) -> tuple[dict, bool]:
         if config.get(key) != n:
             config[key] = n
             changed = True
+
+    try:
+        cmax = int(config.get("comment_max_length", DEFAULT_CONFIG["comment_max_length"]))
+    except (TypeError, ValueError):
+        cmax = DEFAULT_CONFIG["comment_max_length"]
+    cmax = max(1, min(500, cmax))
+    if config.get("comment_max_length") != cmax:
+        config["comment_max_length"] = cmax
+        changed = True
 
     return config, changed

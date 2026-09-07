@@ -869,21 +869,13 @@ updateLaneDebug()
 
 
 function applyFrameStyle(){
-
-let style=document.createElement("style")
-
-style.innerHTML=`
-
-.photoFrame{
-
-padding:${config.frame_padding_top||0}px ${config.frame_padding_side||0}px ${config.frame_padding_bottom||0}px ${config.frame_padding_side||0}px;
-
-}
-
-`
-
-document.head.appendChild(style)
-
+document.querySelectorAll(".photoFrame").forEach(frame=>{
+let w=parseFloat(frame.style.width)
+if(!isFinite(w)||w<=0) w=frame.offsetWidth||150
+if(window.applyPhotoFramePadding) applyPhotoFramePadding(frame, w, config)
+let comment=frame.querySelector(".photoComment")
+if(comment && window.stylePhotoComment) stylePhotoComment(comment, frame, config)
+})
 }
 
 async function applyWakeLock(){
@@ -1323,6 +1315,12 @@ let frame=document.createElement("div")
 frame.classList.add("photoFrame")
 frame.dataset.file=file
 
+let size=isVideo
+?(config.video_min_size||100)+Math.random()*((config.video_max_size||150)-(config.video_min_size||100))
+:(config.image_min_size||100)+Math.random()*((config.image_max_size||150)-(config.image_min_size||100))
+frame.style.width=size+"px"
+if(window.applyPhotoFramePadding) applyPhotoFramePadding(frame, size, config)
+
 let cfg=isVideo?{
 drift_strength:config.video_drift_strength,
 rotation_strength:config.video_rotation_strength,
@@ -1645,15 +1643,6 @@ element.src=(typeof pfUrl==="function"?pfUrl("/media/"+file):("/media/"+file))
 
 
 if(window.attachPhotoComment) attachPhotoComment(frame, file, config)
-
-
-
-let size=isVideo
-?(config.video_min_size||100)+Math.random()*((config.video_max_size||150)-(config.video_min_size||100))
-:(config.image_min_size||100)+Math.random()*((config.image_max_size||150)-(config.image_min_size||100))
-
-frame.style.width=size+"px"
-
 
 let startX=pickSpawnX(size)
 flashSpawnDebug()

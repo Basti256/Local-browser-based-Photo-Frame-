@@ -138,13 +138,15 @@ def network_test(_project: str = Depends(require_admin_pin)):
 
 @router.get("/api/background/list")
 def background_list(_project: str = Depends(require_admin_pin)):
+    from server.catalog import list_shared_backgrounds, shared_value
     paths = require_paths()
-    if not paths.background.is_dir():
-        return []
     files = []
-    for f in sorted(paths.background.iterdir()):
-        if f.is_file() and f.suffix.lower() in BG_IMAGE_EXT:
-            files.append(f.name)
+    if paths.background.is_dir():
+        for f in sorted(paths.background.iterdir()):
+            if f.is_file() and f.suffix.lower() in BG_IMAGE_EXT:
+                files.append(f.name)
+    for name in list_shared_backgrounds():
+        files.append(shared_value(name))
     return files
 
 

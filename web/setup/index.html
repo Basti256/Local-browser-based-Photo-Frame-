@@ -37,6 +37,7 @@
 
 <div class="tabs">
 <button type="button" id="tabProjectsBtn" class="active">Projekte</button>
+<button type="button" id="tabTemplatesBtn">Vorlagen</button>
 <button type="button" id="tabServerBtn">Server</button>
 <button type="button" id="tabLogsBtn">Protokoll</button>
 </div>
@@ -45,10 +46,35 @@
 <div id="plist"></div>
 <label for="newproj">Neues Projekt</label>
 <input id="newproj" placeholder="Name">
+<label for="newtpl">Vorlage (optional)</label>
+<select id="newtpl">
+<option value="">– keine –</option>
+</select>
 <button type="button" id="addproj">Anlegen</button>
 <button type="button" id="importproj" class="secondary">Konfiguration laden</button>
 <input type="file" id="importfile" accept=".zip,.json,application/zip,application/json" hidden>
 <div class="error" id="err" hidden></div>
+</div>
+
+<div id="tabTemplates" hidden>
+<h2>Konfigurationsvorlagen</h2>
+<p class="muted">Eine exportierte Projekt-Config (ZIP oder config.json) hochladen. Name und Beschreibung sind frei. Vorlagen gelten für alle Projekte, ohne Netzwerk, PIN oder Medien zu übernehmen.</p>
+<label for="tplname">Name</label>
+<input id="tplname" placeholder="z. B. Hochzeit">
+<label for="tpldesc">Beschreibung</label>
+<input id="tpldesc" placeholder="kurz, wofür die Vorlage gedacht ist">
+<label for="tplfile">Datei</label>
+<input type="file" id="tplfile" accept=".zip,.json,application/zip,application/json">
+<button type="button" id="saveTpl">Vorlage speichern</button>
+<div class="error" id="tplerr" hidden></div>
+<div id="tpllist"></div>
+
+<h2>Standardhintergründe</h2>
+<p class="muted">Bilder für alle Projekte. Unter Admin erscheinen sie in der Hintergrund-Auswahlliste als „serverweit“.</p>
+<input type="file" id="sharedbgfile" accept="image/*">
+<button type="button" id="saveSharedBg">Hintergrund hochladen</button>
+<div class="error" id="bgerr" hidden></div>
+<div id="sharedbglist" class="bg-shared"></div>
 </div>
 
 <div id="tabServer" hidden>
@@ -113,6 +139,7 @@ let waitTimer = null;
 let logTimer = null;
 let logTabOpen = false;
 const pinVisible = new Set();
+let templatesCache = [];
 function showErr(id, msg){
   const el = document.getElementById(id);
   el.textContent = msg;
@@ -278,19 +305,34 @@ function projectCard(p){
     <input class="ppin" inputmode="numeric" minlength="4" maxlength="10" placeholder="${p.has_pin ? "neuen PIN setzen" : "PIN festlegen"}">
     <button type="button" class="savePin">PIN speichern</button>
     <a class="btn secondary" href="/api/projects/${enc}/export">Export</a>
+    <label>Vorlage anwenden</label>
+    <select class="ptpl">${templateOptionsHtml()}</select>
+    <button type="button" class="secondary applyTpl">Vorlage anwenden</button>
     <button type="button" class="danger deleteProj">Projekt löschen</button>
     </div>
   </div>`;
 }
+function templateOptionsHtml(selected){
+  const cur = selected || "";
+  const bits = [`<option value="">– keine –</option>`];
+  templatesCache.forEach(t => {
+    const sel = t.id === cur ? " selected" : "";
+    bits.push(`<option value="${esc(t.id)}"${sel}>${esc(t.name)}</option>`);
+  });
+  return bits.join("");
+}
 function showTab(which){
   document.getElementById("tabProjects").hidden = which !== "projects";
+  document.getElementById("tabTemplates").hidden = which !== "templates";
   document.getElementById("tabServer").hidden = which !== "server";
   document.getElementById("tabLogs").hidden = which !== "logs";
   document.getElementById("tabProjectsBtn").classList.toggle("active", which === "projects");
+  document.getElementById("tabTemplatesBtn").classList.toggle("active", which === "templates");
   document.getElementById("tabServerBtn").classList.toggle("active", which === "server");
   document.getElementById("tabLogsBtn").classList.toggle("active", which === "logs");
   if (which === "logs") startLogRefresh();
   else stopLogRefresh();
+  if (which === "templates") loadCatalog();
 }
 function logRefreshSec(){
   const n = parseInt(document.getElementById("logrefresh").value, 10);
@@ -325,6 +367,58 @@ function lockHtml(locks){
   });
   return bits.join(" ");
 }
+async function loadCatalog(){
+  try {
+  const tplRes = await fetch("/api/setup/templates");
+  const tplData = await tplRes.json().catch(() => ({}));
+  templatesCache = tplData.templates || [];
+  const sel = document.getElementById("newtpl");
+  if (sel) sel.innerHTML = templateOptionsHtml(sel.value);
+  const list = document.getElementById("tpllist");
+  if (list) {
+    list.innerHTML = templatesCache.map(t => `
+      <div class="card tpl-card" data-id="${esc(t.id)}">
+        <p><strong>${esc(t.name)}</strong></p>
+        <p class="muted">${esc(t.description) || "Keine Beschreibung"}</p>
+        <button type="button" class="danger delTpl">Löschen</button>
+      </div>`).join("") || "<p class='muted'>Keine Vorlagen</p>";
+    list.querySelectorAll("[data-id]").forEach(card => {
+      const id = card.getAttribute("data-id");
+      card.querySelector(".delTpl").onclick = async () => {
+        if (!confirm("Vorlage löschen?")) return;
+        showErr("tplerr", "");
+        const res = await fetch("/api/setup/templates/" + encodeURIComponent(id), {method: "DELETE"});
+        const d = await res.json().catch(()=>({}));
+        if (!res.ok) { showErr("tplerr", detailMsg(d) || "Löschen fehlgeschlagen"); return; }
+        loadCatalog();
+      };
+    });
+  }
+  const bgRes = await fetch("/api/setup/backgrounds");
+  const bgData = await bgRes.json().catch(() => ({}));
+  const files = bgData.files || [];
+  const bglist = document.getElementById("sharedbglist");
+  if (bglist) {
+    bglist.innerHTML = files.map(f => `
+      <div class="thumb" data-file="${esc(f)}">
+        <img src="/api/setup/backgrounds/${encodeURIComponent(f)}" alt="">
+        <p class="muted">${esc(f)}</p>
+        <button type="button" class="danger delBg">Löschen</button>
+      </div>`).join("") || "<p class='muted'>Keine Standardhintergründe</p>";
+    bglist.querySelectorAll("[data-file]").forEach(card => {
+      const filename = card.getAttribute("data-file");
+      card.querySelector(".delBg").onclick = async () => {
+        if (!confirm("Hintergrund „" + filename + "“ löschen?")) return;
+        showErr("bgerr", "");
+        const res = await fetch("/api/setup/backgrounds/" + encodeURIComponent(filename), {method: "DELETE"});
+        const d = await res.json().catch(()=>({}));
+        if (!res.ok) { showErr("bgerr", detailMsg(d) || "Löschen fehlgeschlagen"); return; }
+        loadCatalog();
+      };
+    });
+  }
+  } catch (e) { /* Vorlagen/Hintergründe dürfen die Projektliste nicht blockieren */ }
+}
 async function loadLogs(){
   const res = await fetch("/api/setup/logs");
   if (res.status === 401) { location.href = "/login?next=/setup"; return; }
@@ -357,6 +451,7 @@ async function loadMain(){
   const lockText = lockHtml(s.locks);
   lockbox.textContent = lockText;
   lockbox.hidden = !lockText;
+  try { await loadCatalog(); } catch (e) { /* Vorlagen/Hintergründe dürfen die Projektliste nicht blockieren */ }
   const list = document.getElementById("plist");
   list.innerHTML = s.projects.map(projectCard).join("") || "<p class='muted'>Keine Projekte</p>";
   list.querySelectorAll("[data-name]").forEach(card => {
@@ -431,6 +526,20 @@ async function loadMain(){
       if (!res.ok) { showErr("err", detailMsg(d) || "Stop fehlgeschlagen"); return; }
       loadMain();
     };
+    card.querySelector(".applyTpl").onclick = async () => {
+      const tid = card.querySelector(".ptpl").value;
+      if (!tid) { showErr("err", "Bitte eine Vorlage wählen."); return; }
+      if (!confirm("Vorlage auf „" + name + "“ anwenden? Wand-Einstellungen werden überschrieben. Netzwerk, PIN und Medien bleiben.")) return;
+      showErr("err", "");
+      const res = await fetch("/api/projects/" + encodeURIComponent(name) + "/apply-template", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({template_id: tid})
+      });
+      const d = await res.json().catch(()=>({}));
+      if (!res.ok) { showErr("err", detailMsg(d) || "Vorlage anwenden fehlgeschlagen"); return; }
+      loadMain();
+    };
     card.querySelector(".deleteProj").onclick = async () => {
       if (!confirm("Projekt „" + name + "“ wirklich löschen? Der Projektordner und die Medien werden sofort entfernt.")) return;
       showErr("err", "");
@@ -445,6 +554,7 @@ async function loadMain(){
     (sys.cpu_percent != null ? ("CPU " + sys.cpu_percent + "% · RAM " + sys.ram_percent + "%") : "");
 }
 document.getElementById("tabProjectsBtn").onclick = () => showTab("projects");
+document.getElementById("tabTemplatesBtn").onclick = () => showTab("templates");
 document.getElementById("tabServerBtn").onclick = () => showTab("server");
 document.getElementById("tabLogsBtn").onclick = () => showTab("logs");
 document.getElementById("savePublic").onclick = async () => {
@@ -553,6 +663,39 @@ document.getElementById("clearLogs").onclick = async () => {
   await fetch("/api/setup/logs", {method: "DELETE"});
   loadLogs();
 };
+document.getElementById("saveTpl").onclick = async () => {
+  showErr("tplerr", "");
+  const name = document.getElementById("tplname").value.trim();
+  const description = document.getElementById("tpldesc").value.trim();
+  const fileEl = document.getElementById("tplfile");
+  const file = fileEl.files && fileEl.files[0];
+  if (!name) { showErr("tplerr", "Bitte einen Namen eingeben."); return; }
+  if (!file) { showErr("tplerr", "Bitte eine Config-Datei wählen (ZIP oder JSON)."); return; }
+  const fd = new FormData();
+  fd.append("name", name);
+  fd.append("description", description);
+  fd.append("file", file);
+  const res = await fetch("/api/setup/templates", {method: "POST", body: fd});
+  const d = await res.json().catch(()=>({}));
+  if (!res.ok) { showErr("tplerr", detailMsg(d) || "Speichern fehlgeschlagen"); return; }
+  document.getElementById("tplname").value = "";
+  document.getElementById("tpldesc").value = "";
+  fileEl.value = "";
+  loadCatalog();
+};
+document.getElementById("saveSharedBg").onclick = async () => {
+  showErr("bgerr", "");
+  const fileEl = document.getElementById("sharedbgfile");
+  const file = fileEl.files && fileEl.files[0];
+  if (!file) { showErr("bgerr", "Bitte ein Bild wählen."); return; }
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await fetch("/api/setup/backgrounds", {method: "POST", body: fd});
+  const d = await res.json().catch(()=>({}));
+  if (!res.ok) { showErr("bgerr", detailMsg(d) || "Upload fehlgeschlagen"); return; }
+  fileEl.value = "";
+  loadCatalog();
+};
 document.getElementById("init").onsubmit = async (e) => {
   e.preventDefault();
   if (document.getElementById("password").value !== document.getElementById("password2").value) {
@@ -596,10 +739,11 @@ document.getElementById("savePort").onclick = async () => {
 };
 document.getElementById("addproj").onclick = async () => {
   const name = document.getElementById("newproj").value.trim();
+  const template_id = document.getElementById("newtpl").value;
   const res = await fetch("/api/projects", {
     method: "POST",
     headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({name})
+    body: JSON.stringify({name, template_id})
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) { showErr("err", detailMsg(data) || "Anlegen fehlgeschlagen"); return; }

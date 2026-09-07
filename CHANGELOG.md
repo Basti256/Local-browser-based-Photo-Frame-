@@ -4,6 +4,46 @@ Alle wesentlichen Änderungen am Local-browser-based-Photo-Frame werden in diese
 
 ---
 
+## [2.19.0] – 2026-09-07
+
+### Neu
+
+- `/setup`: Konfigurationsvorlagen hochladen (ZIP oder config.json), mit Name und Beschreibung. Beim Anlegen und in den Projektdetails anwendbar. Gilt für alle Projekte, ohne Netzwerk, PIN oder Medien.
+- `/setup`: Standardhintergründe hochladen. In jedem Projekt unter Admin als „serverweit“ auswählbar.
+
+### Behoben
+
+- Erstkonfiguration: ein zu kurzes Passwort sperrt die Einrichtung nicht mehr.
+- Serverweite Hintergründe nur bei laufendem Projekt (`/background/shared/…`).
+- Einrichtung: Fehler beim Laden der Vorlagen blockieren die Projektliste nicht.
+
+---
+
+## [2.18.7] – 2026-09-07
+
+### Geändert
+
+- Admin: Vorschau des Hintergrundbilds zeigt das ganze Bild, höchstens 300 Pixel hoch. Position und Größe gelten weiter auf der Wand.
+
+---
+
+## [2.18.6] – 2026-09-07
+
+### Neu
+
+- Debug: Auswahl „Zufällige Bildtexte beim Upload“. Leere Kommentare werden mit Quatsch, Smileys und Symbolen gefüllt, bis zum Zeichenlimit.
+
+---
+
+## [2.18.5] – 2026-09-07
+
+### Geändert
+
+- Wand: Polaroid-Rahmen und Bildtext wachsen mit größeren Fotos mit, damit der Text lesbar bleibt.
+- Admin: „Max. Zeichen pro Kommentar“ liegt im Reiter Upload. Die Upload-Seite übernimmt den Wert ohne Neuladen und begrenzt die Eingabe.
+
+---
+
 ## [2.18.4] – 2026-09-07
 
 ### Geändert

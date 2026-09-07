@@ -3,7 +3,7 @@
 Handbuch der Software. Funktionen, Schnittstellen, Ports, Betrieb.
 Keine personenbezogenen Daten. Keine Zugangsdaten.
 
-Version des beschriebenen Stands: 2.18.4
+Version des beschriebenen Stands: 2.19.0
 
 ---
 
@@ -102,6 +102,8 @@ Ablage unter `data/`. Nicht in der Versionskontrolle (nur leeres Verzeichnis mit
 | `secret.key` | Schlüssel für Session-Signatur |
 | `login_lock.json` | Fehlversuche und Sperrzeit für Setup-Login und Erstkonfiguration |
 | `app.log` | Protokoll der letzten 72 Stunden, ohne Passwörter oder PINs |
+| `templates/<id>/` | Config-Vorlagen: `meta.json` (Name, Beschreibung), `config.json` (nur Wand-Schlüssel), optional `background/` und `header/` |
+| `shared_backgrounds/` | Standardhintergründe für alle Projekte |
 
 `projects/` ebenfalls lokal, nicht im Git (nur `.gitkeep`). Pro Projekt `config.json`, `access.json` (PIN-Hash, versiegelter Anzeigewert, Fehlzählung, Sperrzeit; keine Klartext-Ziffern), `media/`, `derived/`, `header/`, `background/`. Die PIN-Anzeige erfolgt nur über `/api/setup/state` (Master).
 
@@ -147,7 +149,7 @@ Zustandsändernde authentifizierte Anfragen: Header `Origin` muss zum Host der A
 
 ### Geschützt (Master)
 
-`/setup` nach Erststart. APIs: `/api/setup/state`, `/api/setup/logs`, `/api/setup/update`, `/api/projects*`, `/api/runtime`, `/api/system`. `POST /api/login` mit Sperre nach Fehlversuchen.
+`/setup` nach Erststart. APIs: `/api/setup/state`, `/api/setup/logs`, `/api/setup/update`, `/api/setup/templates`, `/api/setup/backgrounds`, `/api/projects*`, `/api/runtime`, `/api/system`. `POST /api/login` mit Sperre nach Fehlversuchen.
 
 ### Geschützt (PIN)
 
@@ -213,6 +215,15 @@ Unter `/{name}/` gelten dieselben APIs und Dateipfade wie ohne Prefix: `/ws`, `/
 | POST | `/api/projects` | Master, leeres Projekt anlegen |
 | POST | `/api/projects/import` | Master, ZIP oder `config.json`; neues Projekt |
 | GET | `/api/projects/{name}/export` | Master, ZIP nur Config und Hintergrund-/Header-Bilder |
+| GET | `/api/setup/templates` | Master, Vorlagenliste |
+| POST | `/api/setup/templates` | Master, ZIP oder `config.json` plus Name und Beschreibung |
+| PATCH | `/api/setup/templates/{id}` | Master, Name/Beschreibung |
+| DELETE | `/api/setup/templates/{id}` | Master |
+| POST | `/api/projects/{name}/apply-template` | Master, Wand-Config der Vorlage auf das Projekt |
+| GET | `/api/setup/backgrounds` | Master, Standardhintergründe |
+| POST | `/api/setup/backgrounds` | Master, Bild hochladen |
+| GET | `/api/setup/backgrounds/{datei}` | Master, Datei |
+| DELETE | `/api/setup/backgrounds/{datei}` | Master |
 | POST | `/api/projects/{name}/start` | Master |
 | POST | `/api/projects/{name}/stop` | Master |
 | DELETE | `/api/projects/{name}` | Master, Projektordner und Medien löschen |
@@ -231,6 +242,8 @@ Unter `/{name}/` gelten dieselben APIs und Dateipfade wie ohne Prefix: `/ws`, `/
 | GET | `/api/images` | nein |
 | POST | `/upload` | nein |
 | WS | `/ws` | nein, nur Wall-Ereignisse |
+| GET | `/background/shared/{datei}` | nein, laufendes Projekt, serverweiter Hintergrund |
+| GET | `/background/{datei}` | nein, laufendes Projekt |
 | GET | `/sw.js` | nein |
 
 ---
@@ -264,7 +277,11 @@ Datei: `projects/<name>/config.json`. Fehlende Schlüssel werden aus Defaults er
 
 Export (`GET /api/projects/{name}/export`): ZIP mit `config.json` und Bildern aus `background/` sowie `header/`. Ohne `media/`, `derived/`, `hidden.json`, `access.json`. Import (`POST /api/projects/import`): legt ein neues Projekt an (neuer PIN). Übernimmt Wand-Schlüssel aus der Datei, nicht Setup-Schlüssel (Netzwerk, Speicher, Port). Optional Bilder aus `background/` und `header/` im ZIP. `config.json` darf im ZIP im Wurzelverzeichnis oder in einem Ordner liegen.
 
-Bildtext der Gäste: Datei `media/<stem>.txt` neben dem Medium. Die Wall (Fly und Grid) lädt sie über `/media/<stem>.txt`, wenn `comments_enabled` gesetzt ist. Schriftart unter `/admin` als Auswahlliste.
+Vorlagen liegen serverweit unter `data/templates/`. Anlage unter `/setup` (Reiter Vorlagen): Upload derselben ZIP/`config.json` wie beim Projektexport, plus Name und Beschreibung. Keine Netzwerk-, Speicher-, Port- oder PIN-Daten. Beim Anlegen eines Projekts optional eine Vorlage wählen; bestehende Projekte: in den Kartendetails „Vorlage anwenden“. Hintergründe und Header aus der Vorlage werden in den Projektordner kopiert.
+
+Standardhintergründe unter `data/shared_backgrounds/`, Upload unter `/setup`. In der Admin-Auswahlliste als `shared:<datei>` mit dem Zusatz „serverweit“. Die Wall und die Admin-Vorschau laden `GET /background/shared/{datei}` (nur bei laufendem Projekt). `GET /background/{datei}` bleibt für Projektdateien; ein Wert mit Präfix `shared:` wird ebenfalls aus dem serverweiten Ordner gelesen.
+
+Bildtext der Gäste: Datei `media/<stem>.txt` neben dem Medium. Die Wall (Fly und Grid) lädt sie über `/media/<stem>.txt`, wenn `comments_enabled` gesetzt ist. Schriftart unter `/admin` als Auswahlliste. `comment_max_length` (1–500, Standard 80) steht unter `/admin` im Reiter Upload; die Upload-Seite setzt `maxlength`, kürzt beim Tippen und übernimmt den Wert nach dem Speichern ohne Neuladen. Der Server kürzt beim Speichern ebenfalls. Debug: `debug_random_comments` unter `/admin` (System → Debug, Auswahl An/Aus) füllt leere Bildtexte beim Upload mit zufälligem Quatsch inkl. Smileys und Symbolen, begrenzt auf `comment_max_length`.
 
 ### Medienspeicher
 
@@ -312,7 +329,7 @@ WebSocket sendet den Anzeigenamen nach dem Transcoding.
 
 ## 13. Wall
 
-Fly: bewegte Medien. Spawn-Modus `spawn_mode`: `lanes` (Standard), `burst` oder `random`. Bahnen: `spawn_lane_count` (1–20, Standard 6), `spawn_lane_order` `random` / `random_apart` (Standard) / `adjacent`; belegte Bahnen werden nach Möglichkeit übersprungen; die äußeren Bahnen liegen um die halbe maximale Bild-/Videogröße (`image_max_size` / `video_max_size`) vom Rand. Burst: Sinus Mitte→rechts→Mitte→links in 0,1°-Schritten; `spawn_burst_period` ist die Dauer in Sekunden für einmal links nach rechts (Minimum und Schritt 0,1); die Bildmitte liegt auf der aktuellen Sinus-Position. Zufall: beliebige horizontale Position ohne Bahnen. Debug-Overlay: Bahnlinien im Modus `lanes`, wandernde Linie mit Winkel im Modus `burst`; bei einem Spawn wird die betreffende Linie 500 ms rot. Die Flugstrecke nach oben richtet sich nach der tatsächlichen Frame-Größe (inkl. Hochformat), nicht nur nach der Bildschirmhöhe. Bilder und Videos nutzen dieselbe Flug- und Rotationslogik; getrennte Config-Schlüssel (z. B. `image_rotation_strength` / `video_rotation_strength`) bei gleichen Werten also gleiches Verhalten. `video_playback_mode` (`once` / `loop` / `bounce`) betrifft nur das Abspielen im Frame. `image_rotation_strength` und `video_rotation_strength` sind der Maximalwinkel in Grad (0 = keine Drehung). Banner-Text: `banner_align` (`left` / `center` / `right`), `banner_font`, Unterstreichen als `++Text++` im Markdown. Upload-Begrüßung ist Markdown (mehrere Zeilen, Fett/Kursiv/Überschrift) plus `upload_greeting_align`, `upload_greeting_font`, `upload_greeting_color`, `upload_greeting_size`, `upload_greeting_bold`, `upload_greeting_underline`. Header-Bild: Datei in `header/`, Auswahl und Upload unter `/admin`, Drehung `upload_image_rotation` (0/90/180/270) per CSS, Original unverändert. Grid: Spalten, Lauf von unten nach oben. Die Einstellungen unter `/admin` liegen auf einer Seite (Fly- und Grid-Felder), gegliedert in Reiter Wand, Texte, Upload und System. Speichern lädt die aktuelle Config und setzt die bekannten Schlüssel; Felder anderer Reiter gehen dabei nicht verloren. Die vorherige Admin-HTML bleibt unter `/admin/classic` (Fly oder Grid je nach `wall_view_mode`). Banner-Text ist Markdown; unter `/admin` wird er in einem WYSIWYG mit Live-Vorschau in 1/4 der Wall-Größe (Position, Höhe, Farben, Ausrichtung, Schrift) bearbeitet. Die Schriftgröße skaliert mit der Bannerhöhe und wird bei mehrzeiligem Text automatisch so verkleinert, dass alles in die Leiste passt, ohne einzelne Zeilen flachzudrücken. Enter im Editor erzeugt einen neuen Absatz; Überschriften gelten nur für die erste Zeile. Hintergrundbild: 90°-Drehung, Helligkeit, Kontrast, Position (mitte/oben/unten), Größe relativ zur Bildschirmfüllung, Deckkraft gegenüber der Hintergrundfarbe. Originaldatei unverändert. Service Worker cached `/media/*` bei aktiviertem Cache.
+Fly: bewegte Medien. Spawn-Modus `spawn_mode`: `lanes` (Standard), `burst` oder `random`. Bahnen: `spawn_lane_count` (1–20, Standard 6), `spawn_lane_order` `random` / `random_apart` (Standard) / `adjacent`; belegte Bahnen werden nach Möglichkeit übersprungen; die äußeren Bahnen liegen um die halbe maximale Bild-/Videogröße (`image_max_size` / `video_max_size`) vom Rand. Burst: Sinus Mitte→rechts→Mitte→links in 0,1°-Schritten; `spawn_burst_period` ist die Dauer in Sekunden für einmal links nach rechts (Minimum und Schritt 0,1); die Bildmitte liegt auf der aktuellen Sinus-Position. Zufall: beliebige horizontale Position ohne Bahnen. Debug-Overlay: Bahnlinien im Modus `lanes`, wandernde Linie mit Winkel im Modus `burst`; bei einem Spawn wird die betreffende Linie 500 ms rot. Die Flugstrecke nach oben richtet sich nach der tatsächlichen Frame-Größe (inkl. Hochformat), nicht nur nach der Bildschirmhöhe. Bilder und Videos nutzen dieselbe Flug- und Rotationslogik; getrennte Config-Schlüssel (z. B. `image_rotation_strength` / `video_rotation_strength`) bei gleichen Werten also gleiches Verhalten. `video_playback_mode` (`once` / `loop` / `bounce`) betrifft nur das Abspielen im Frame. `image_rotation_strength` und `video_rotation_strength` sind der Maximalwinkel in Grad (0 = keine Drehung). Banner-Text: `banner_align` (`left` / `center` / `right`), `banner_font`, Unterstreichen als `++Text++` im Markdown. Upload-Begrüßung ist Markdown (mehrere Zeilen, Fett/Kursiv/Überschrift) plus `upload_greeting_align`, `upload_greeting_font`, `upload_greeting_color`, `upload_greeting_size`, `upload_greeting_bold`, `upload_greeting_underline`. Header-Bild: Datei in `header/`, Auswahl und Upload unter `/admin`, Drehung `upload_image_rotation` (0/90/180/270) per CSS, Original unverändert. Polaroid-Rahmen (`frame_padding_*`) und Bildtext-Schrift wachsen mit der Medienbreite über 150 px Referenz (Faktor bis 2,5), damit der Text unter größeren Fotos lesbar bleibt. Grid: Spalten, Lauf von unten nach oben; dieselben Rahmenabstände, wenn Fotorahmen an sind. Die Einstellungen unter `/admin` liegen auf einer Seite (Fly- und Grid-Felder), gegliedert in Reiter Wand, Texte, Upload und System. Speichern lädt die aktuelle Config und setzt die bekannten Schlüssel; Felder anderer Reiter gehen dabei nicht verloren. Die vorherige Admin-HTML bleibt unter `/admin/classic` (Fly oder Grid je nach `wall_view_mode`). Banner-Text ist Markdown; unter `/admin` wird er in einem WYSIWYG mit Live-Vorschau in 1/4 der Wall-Größe (Position, Höhe, Farben, Ausrichtung, Schrift) bearbeitet. Die Schriftgröße skaliert mit der Bannerhöhe und wird bei mehrzeiligem Text automatisch so verkleinert, dass alles in die Leiste passt, ohne einzelne Zeilen flachzudrücken. Enter im Editor erzeugt einen neuen Absatz; Überschriften gelten nur für die erste Zeile. Hintergrundbild: 90°-Drehung, Helligkeit, Kontrast, Position (mitte/oben/unten), Größe relativ zur Bildschirmfüllung, Deckkraft gegenüber der Hintergrundfarbe. Originaldatei unverändert. Die Admin-Vorschau unter Wand zeigt das gesamte Bild (höchstens 300 Pixel hoch, Seitenverhältnis erhalten), nicht den Wand-Zuschnitt. Position und Größe wirken auf der Wall. Service Worker cached `/media/*` bei aktiviertem Cache.
 
 Client-Bibliotheken per CDN: QRCode.js, marked, Schriftarten.
 
