@@ -146,6 +146,8 @@ def try_pin(paths, pin: str) -> None:
         raise HTTPException(status_code=409, detail="Kein PIN gesetzt. In der Einrichtung festlegen.")
     remaining = wait_seconds_remaining(paths)
     if remaining > 0:
+        from server.applog import log
+        log("WARNING", f"PIN-Anmeldung gesperrt ({paths.name})")
         raise HTTPException(
             status_code=429,
             detail={"message": "Warten vor dem nächsten Versuch.", "wait_seconds": round(remaining, 1)},
@@ -161,6 +163,8 @@ def try_pin(paths, pin: str) -> None:
         data["fail_count"] = fail_count
         data["lock_until"] = time.time() + wait
         save_access(paths, data)
+        from server.applog import log
+        log("WARNING", f"PIN falsch ({paths.name})")
         raise HTTPException(
             status_code=401,
             detail={"message": "PIN falsch.", "wait_seconds": wait, "fail_count": fail_count},
@@ -168,6 +172,8 @@ def try_pin(paths, pin: str) -> None:
     data["fail_count"] = 0
     data["lock_until"] = 0.0
     save_access(paths, data)
+    from server.applog import log
+    log("INFO", f"PIN-Anmeldung erfolgreich ({paths.name})")
 
 
 def set_admin_session(response: Response, project: str, request: Request) -> None:

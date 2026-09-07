@@ -141,6 +141,8 @@ class ProjectRunner:
             set_active_project(name)
             self._persist()
             print(f"[Projekt] {name} läuft auf Port {port}")
+            from server.applog import log
+            log("INFO", f"Projekt gestartet {name} Port {port}")
             return {"ok": True, "name": name, "port": port, "running": True}
 
     async def stop(self, name: str, persist: bool = True) -> dict:
@@ -166,6 +168,8 @@ class ProjectRunner:
                 except Exception as e:
                     print("Firewall konnte nicht geschlossen werden:", e)
                 print(f"[Projekt] {name} gestoppt (Port {port})")
+                from server.applog import log
+                log("INFO", f"Projekt gestoppt {name} Port {port}")
             clear_active_project(name)
             if persist:
                 self._persist()

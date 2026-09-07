@@ -16,12 +16,44 @@
 <label for="password">Passwort</label>
 <input id="password" name="password" type="password" autocomplete="current-password" required>
 <div class="error" id="err" hidden></div>
-<button type="submit">Anmelden</button>
+<p class="muted" id="wait" hidden></p>
+<button type="submit" id="btn">Anmelden</button>
 </form>
 </div>
 </div>
 <script>
 const params = new URLSearchParams(location.search);
+let waitTimer = null;
+function setWait(sec){
+  const el = document.getElementById("wait");
+  const btn = document.getElementById("btn");
+  if (waitTimer) clearInterval(waitTimer);
+  if (!sec || sec <= 0){
+    el.hidden = true;
+    btn.disabled = false;
+    return;
+  }
+  let left = sec;
+  el.hidden = false;
+  btn.disabled = true;
+  const tick = () => {
+    el.textContent = "Login unter /login gesperrt noch " + Math.ceil(left) + " s (zu viele Fehlversuche).";
+    if (left <= 0){
+      clearInterval(waitTimer);
+      el.hidden = true;
+      btn.disabled = false;
+      return;
+    }
+    left -= 0.2;
+  };
+  tick();
+  waitTimer = setInterval(tick, 200);
+}
+function detailInfo(data){
+  const d = data && data.detail;
+  if (d && typeof d === "object") return {message: d.message || "Anmeldung fehlgeschlagen.", wait: Number(d.wait_seconds) || 0};
+  return {message: typeof d === "string" ? d : "Anmeldung fehlgeschlagen.", wait: 0};
+}
 document.getElementById("f").onsubmit = async (e) => {
   e.preventDefault();
   const err = document.getElementById("err");
@@ -33,16 +65,19 @@ document.getElementById("f").onsubmit = async (e) => {
       password: document.getElementById("password").value
     })
   });
+  const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    err.textContent = data.detail || "Anmeldung fehlgeschlagen.";
+    const info = detailInfo(data);
+    err.textContent = info.message;
     err.hidden = false;
+    setWait(info.wait);
     return;
   }
   location.href = params.get("next") || "/setup";
 };
 fetch("/api/setup/status").then(r => r.json()).then(s => {
   if (s.first_run) location.href = "/setup";
+  if (s.login_lock && s.login_lock.locked) setWait(s.login_lock.wait_seconds);
 });
 </script>
 </body>

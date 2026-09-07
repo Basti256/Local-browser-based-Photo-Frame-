@@ -20,6 +20,9 @@ DEFAULT_RUNTIME = {
     "bind_host": "0.0.0.0",
     "active_project": "",
     "running_projects": [],
+    "public_host": "",
+    "public_https": False,
+    "log_level": "INFO",
 }
 
 
@@ -59,6 +62,13 @@ def load_runtime() -> dict[str, Any]:
         changed = True
     data["active_project"] = str(data.get("active_project") or "")
     data["running_projects"] = _clean_running(data.get("running_projects"))
+    data["public_host"] = str(data.get("public_host") or "").strip()
+    data["public_https"] = bool(data.get("public_https"))
+    level = str(data.get("log_level") or "INFO").upper()
+    if level not in ("DEBUG", "INFO", "WARNING", "ERROR"):
+        level = "INFO"
+        changed = True
+    data["log_level"] = level
     if changed:
         save_runtime(data)
     return {
@@ -66,6 +76,9 @@ def load_runtime() -> dict[str, Any]:
         "bind_host": data["bind_host"],
         "active_project": data["active_project"],
         "running_projects": list(data["running_projects"]),
+        "public_host": data["public_host"],
+        "public_https": data["public_https"],
+        "log_level": data["log_level"],
     }
 
 
@@ -80,9 +93,14 @@ def save_runtime(data: dict[str, Any]) -> None:
         "bind_host": data.get("bind_host") or "0.0.0.0",
         "active_project": str(data.get("active_project") or ""),
         "running_projects": _clean_running(data.get("running_projects")),
+        "public_host": str(data.get("public_host") or "").strip(),
+        "public_https": bool(data.get("public_https")),
+        "log_level": str(data.get("log_level") or "INFO").upper(),
     }
     if payload["bind_host"] not in ("0.0.0.0", "127.0.0.1"):
         payload["bind_host"] = "0.0.0.0"
+    if payload["log_level"] not in ("DEBUG", "INFO", "WARNING", "ERROR"):
+        payload["log_level"] = "INFO"
     with RUNTIME_FILE.open("w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)
         f.write("\n")

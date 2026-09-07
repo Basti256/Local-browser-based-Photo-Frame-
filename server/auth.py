@@ -1,9 +1,8 @@
-"""Authentifizierung: Argon2id-Hash, Session-Cookie, Login-Rate-Limit."""
+"""Authentifizierung: Argon2id-Hash, Session-Cookie. Sperre nach Fehlversuchen in lockout."""
 from __future__ import annotations
 
 import json
 import secrets
-import time
 from typing import Any
 
 from argon2 import PasswordHasher
@@ -18,11 +17,8 @@ COOKIE_MAX_AGE = 60 * 60 * 24 * 7
 SESSION_SALT = "photo-frame-session"
 SETUP_USERNAME = "Admin"
 MIN_PASSWORD_LEN = 10
-LOGIN_WINDOW_SEC = 15 * 60
-LOGIN_MAX_FAILURES = 5
 
 _hasher = PasswordHasher()
-_failures: dict[str, list[float]] = {}
 
 
 def _secret() -> str:
@@ -91,30 +87,6 @@ def verify_password(password: str, password_hash: str) -> bool:
         return _hasher.verify(password_hash, password)
     except (VerifyMismatchError, InvalidHash):
         return False
-
-
-def _client_key(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
-
-
-def login_allowed(request: Request) -> bool:
-    key = _client_key(request)
-    now = time.time()
-    stamps = [t for t in _failures.get(key, []) if now - t < LOGIN_WINDOW_SEC]
-    _failures[key] = stamps
-    return len(stamps) < LOGIN_MAX_FAILURES
-
-
-def record_login_failure(request: Request) -> None:
-    key = _client_key(request)
-    _failures.setdefault(key, []).append(time.time())
-
-
-def clear_login_failures(request: Request) -> None:
-    _failures.pop(_client_key(request), None)
 
 
 def set_session(response: Response, request: Request) -> None:

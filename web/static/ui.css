@@ -12,5 +12,14 @@ button.danger{background:#8b1a1a;}
 .error{color:#ff8a80;margin:8px 0;}
 table{width:100%;border-collapse:collapse;margin-top:12px;}
 th,td{text-align:left;padding:8px 4px;border-bottom:1px solid #333;}
-nav{margin-bottom:16px;font-size:14px;}
-nav a{margin-right:12px;}
+.wrap.wide{max-width:960px;}
+.warn{color:#ffcc80;margin:8px 0;}
+.tabs{display:flex;gap:8px;margin:0 0 16px;}
+.tabs button{margin-top:0;background:#333;}
+.tabs button.active{background:#2e7d32;}
+.switch{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0 16px;}
+.switch button{margin-top:0;}
+.switch button.active{background:#2e7d32;}
+pre.log{background:#111;border:1px solid #333;border-radius:6px;padding:12px;max-height:480px;overflow:auto;white-space:pre-wrap;word-break:break-word;font-size:12px;line-height:1.4;}
+.row{display:flex;align-items:center;gap:8px;font-weight:600;}
+.row input{width:auto;}

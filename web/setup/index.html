@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="/static/ui.css">
 </head>
 <body>
-<div class="wrap">
+<div class="wrap wide">
 <div id="first" class="card" hidden>
 <h1>Erstkonfiguration</h1>
 <p class="muted">Ein Konto <strong>Admin</strong> für die Einrichtungsseite. Das Passwort wird nur als Hash gespeichert. Ein Projekt kannst du danach anlegen.</p>
@@ -20,7 +20,8 @@
 <input id="initport" type="number" min="1" max="65535" value="8000" required>
 <p class="muted">Wenn du den Port änderst, startet der Server neu. Die Seite wartet dann auf die neue Adresse.</p>
 <div class="error" id="initerr" hidden></div>
-<button type="submit">Einrichtung abschließen</button>
+<p class="muted" id="initwait" hidden></p>
+<button type="submit" id="initbtn">Einrichtung abschließen</button>
 </form>
 </div>
 
@@ -33,13 +34,33 @@
 <p class="muted" id="netinfo"></p>
 <p class="muted" id="sys"></p>
 <p class="muted">ffmpeg: <span id="ffmpeg"></span></p>
+<div class="warn" id="lockbox" hidden></div>
 
+<div class="tabs">
+<button type="button" id="tabProjectsBtn" class="active">Projekte</button>
+<button type="button" id="tabLogsBtn">Protokoll</button>
+</div>
+
+<div id="tabProjects">
 <h2>Server</h2>
 <label for="port">Einrichtungs-Port</label>
 <input id="port" type="number" min="1" max="65535">
 <button type="button" id="savePort">Port speichern</button>
+<label for="pubhost">Öffentliche Adresse (Domain oder IP)</label>
+<input id="pubhost" placeholder="frame.example.org">
+<label class="row">
+<input type="checkbox" id="pubhttps">
+HTTPS (Reverse-Proxy, Anzeige-URLs ohne App-Port)
+</label>
+<p class="muted">Gilt für alle Projekte im Modus Public. Der Projektname ist der Pfad, z. B. https://frame.example.org/hochzeit/upload</p>
+<button type="button" id="savePublic">Öffentliche Adresse speichern</button>
 
 <h2>Projekte</h2>
+<div class="switch">
+<span class="muted">Links:</span>
+<button type="button" id="linksLocal">Lokal</button>
+<button type="button" id="linksPublic">Öffentlich</button>
+</div>
 <div id="plist"></div>
 <label for="newproj">Neues Projekt</label>
 <input id="newproj" placeholder="Name">
@@ -47,6 +68,24 @@
 <button type="button" id="importproj" class="secondary">Konfiguration laden</button>
 <input type="file" id="importfile" accept=".zip,.json,application/zip,application/json" hidden>
 <div class="error" id="err" hidden></div>
+</div>
+
+<div id="tabLogs" hidden>
+<h2>Protokoll</h2>
+<p class="muted">Die letzten 72 Stunden. Keine Passwörter oder PINs.</p>
+<label for="loglevel">Log-Level</label>
+<select id="loglevel">
+<option>DEBUG</option>
+<option>INFO</option>
+<option>WARNING</option>
+<option>ERROR</option>
+</select>
+<button type="button" id="saveLevel">Level speichern</button>
+<button type="button" id="refreshLogs" class="secondary">Aktualisieren</button>
+<button type="button" id="downloadLogs" class="secondary">Herunterladen</button>
+<button type="button" id="clearLogs" class="danger">Leeren</button>
+<pre class="log" id="logtext"></pre>
+</div>
 </div>
 
 <div id="restart" class="card" hidden>
@@ -58,10 +97,47 @@
 </div>
 </div>
 <script>
+let linkMode = localStorage.getItem("pfSetupLinkMode") || "public";
+let waitTimer = null;
 function showErr(id, msg){
   const el = document.getElementById(id);
   el.textContent = msg;
   el.hidden = !msg;
+}
+function detailMsg(data){
+  const d = data && data.detail;
+  if (d && typeof d === "object") return d.message || "Fehler";
+  return typeof d === "string" ? d : "";
+}
+function detailWait(data){
+  const d = data && data.detail;
+  if (d && typeof d === "object") return Number(d.wait_seconds) || 0;
+  return 0;
+}
+function setWaitEl(id, btnId, sec, prefix){
+  const el = document.getElementById(id);
+  const btn = btnId ? document.getElementById(btnId) : null;
+  if (waitTimer) clearInterval(waitTimer);
+  if (!sec || sec <= 0){
+    if (el) el.hidden = true;
+    if (btn) btn.disabled = false;
+    return;
+  }
+  let left = sec;
+  if (el) el.hidden = false;
+  if (btn) btn.disabled = true;
+  const tick = () => {
+    if (el) el.textContent = (prefix || "Gesperrt") + " noch " + Math.ceil(left) + " s";
+    if (left <= 0){
+      clearInterval(waitTimer);
+      if (el) el.hidden = true;
+      if (btn) btn.disabled = false;
+      return;
+    }
+    left -= 0.2;
+  };
+  tick();
+  waitTimer = setInterval(tick, 200);
 }
 function beginPortWait(setupUrl, waitSec){
   const wait = waitSec || 10;
@@ -105,26 +181,41 @@ function beginPortWait(setupUrl, waitSec){
   }
   startTick();
 }
+function esc(s){
+  return String(s || "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+}
+function projectLinks(p){
+  const publicOk = p.network_mode === "public" && p.public_url;
+  const usePublic = linkMode === "public" && publicOk;
+  const base = usePublic ? p.public_url : p.local_url;
+  if (!base) {
+    return `<p class="muted">Wall, Upload und Admin: zuerst starten oder die öffentliche Adresse eintragen.</p>`;
+  }
+  const note = p.running ? "" : " <span class=\"muted\">(Projekt noch gestoppt)</span>";
+  return `<p>
+    <a href="${esc(base)}/wall" target="_blank">Wall</a> ·
+    <a href="${esc(base)}/upload" target="_blank">Upload</a> ·
+    <a href="${esc(base)}/admin" target="_blank">Admin</a> ·
+    <a href="${esc(base)}/admin/browser" target="_blank">Medienbrowser</a>${note}
+  </p>`;
+}
 function projectCard(p){
-  const host = p.public_host || "";
-  const https = p.public_https ? "checked" : "";
-  const pubStyle = p.network_mode === "public" ? "" : "display:none";
   const folderStyle = p.storage_mode === "folder" ? "" : "display:none";
   const enc = encodeURIComponent(p.name);
   const status = p.running ? "läuft" : "gestoppt";
-  const links = p.running
-    ? `<p>
-      <a href="${p.base_url}/wall" target="_blank">Wall</a> ·
-      <a href="${p.base_url}/upload" target="_blank">Upload</a> ·
-      <a href="${p.base_url}/admin" target="_blank">Admin</a> ·
-      <a href="${p.base_url}/admin/browser" target="_blank">Medienbrowser</a>
-    </p>`
-    : `<p class="muted">Wall, Upload und Admin nach dem Start.</p>`;
-  return `<div class="card" style="margin:12px 0;padding:16px;" data-name="${p.name}">
-    <p><strong>${p.name}</strong> · ${status} · Port ${p.port} · ${p.media_count} Medien</p>
-    <p>Admin-PIN: <strong style="letter-spacing:0.18em;font-size:1.25rem">${p.pin ? p.pin : (p.has_pin ? "gesetzt, nicht anzeigbar" : "fehlt")}</strong></p>
-    ${links}
-    <p class="muted">Anzeige-URL: ${p.base_url}</p>
+  const pinLock = p.pin_lock && p.pin_lock.locked
+    ? `<p class="warn">Login unter ${esc(p.pin_lock.path)} gesperrt für ${Math.ceil(p.pin_lock.wait_seconds)} s (zu viele Fehlversuche).</p>`
+    : "";
+  const publicLine = p.network_mode === "public"
+    ? `<p class="muted">Öffentliche URL: ${p.public_url ? esc(p.public_url) : "— zuerst die Server-Adresse oben eintragen"}</p>`
+    : `<p class="muted">Keine öffentliche Adresse (Modus Network, nur LAN).</p>`;
+  return `<div class="card" style="margin:12px 0;padding:16px;" data-name="${esc(p.name)}">
+    <p><strong>${esc(p.name)}</strong> · ${status} · Port ${p.port} · ${p.media_count} Medien</p>
+    <p>Admin-PIN: <strong style="letter-spacing:0.18em;font-size:1.25rem">${p.pin ? esc(p.pin) : (p.has_pin ? "gesetzt, nicht anzeigbar" : "fehlt")}</strong></p>
+    ${pinLock}
+    ${projectLinks(p)}
+    <p class="muted">LAN: ${esc(p.local_url)}</p>
+    ${publicLine}
     ${p.running
       ? '<button type="button" class="danger stop">Stoppen</button>'
       : '<button type="button" class="start">Starten</button>'}
@@ -133,17 +224,9 @@ function projectCard(p){
     <button type="button" class="savePortProj" ${p.running ? "disabled" : ""}>Port speichern</button>
     <label>Modus</label>
     <select class="pmode">
-      <option value="network" ${p.network_mode==="network"?"selected":""}>Network (LAN-IP und Port, HTTP)</option>
-      <option value="public" ${p.network_mode==="public"?"selected":""}>Public (Domain oder IP)</option>
+      <option value="network" ${p.network_mode==="network"?"selected":""}>Network (nur LAN-Port, keine öffentliche URL)</option>
+      <option value="public" ${p.network_mode==="public"?"selected":""}>Public (Server-Adresse plus /${esc(p.name)})</option>
     </select>
-    <div class="ppublic" style="${pubStyle}">
-      <label>Domain oder IP</label>
-      <input class="phost" value="${host}" placeholder="frame.example.org oder 203.0.113.10">
-      <label class="row" style="display:flex;align-items:center;gap:8px;font-weight:600;">
-        <input type="checkbox" class="phttps" ${https} style="width:auto;">
-        HTTPS (Reverse-Proxy, Anzeige-URLs mit https://, ohne App-Port)
-      </label>
-    </div>
     <button type="button" class="saveNet">Netzwerk speichern</button>
     <label>Medienspeicher</label>
     <select class="pstore">
@@ -152,7 +235,7 @@ function projectCard(p){
     </select>
     <div class="pfolder" style="${folderStyle}">
       <label>Pfad</label>
-      <input class="ppath" value="${(p.storage_path || "").replace(/"/g, "&quot;")}" placeholder="Z:\\\\Event oder \\\\nas\\share\\event oder /mnt/nas/event">
+      <input class="ppath" value="${esc(p.storage_path || "")}" placeholder="Z:\\\\Event oder \\\\nas\\share\\event oder /mnt/nas/event">
       <p class="muted">Samba: Share mounten oder UNC-Pfad. Nextcloud über WebDAV folgt als eigener Modus.</p>
     </div>
     <button type="button" class="saveStore">Speicher speichern</button>
@@ -161,6 +244,35 @@ function projectCard(p){
     <button type="button" class="savePin">PIN speichern</button>
     <a class="btn secondary" href="/api/projects/${enc}/export">Export</a>
   </div>`;
+}
+function paintLinkSwitch(){
+  document.getElementById("linksLocal").classList.toggle("active", linkMode === "local");
+  document.getElementById("linksPublic").classList.toggle("active", linkMode === "public");
+}
+function showTab(which){
+  const proj = which === "projects";
+  document.getElementById("tabProjects").hidden = !proj;
+  document.getElementById("tabLogs").hidden = proj;
+  document.getElementById("tabProjectsBtn").classList.toggle("active", proj);
+  document.getElementById("tabLogsBtn").classList.toggle("active", !proj);
+  if (!proj) loadLogs();
+}
+function lockHtml(locks){
+  const bits = [];
+  if (locks && locks.setup && locks.setup.locked) {
+    bits.push("Login unter /login bzw. /setup gesperrt für " + Math.ceil(locks.setup.wait_seconds) + " s (zu viele Fehlversuche).");
+  }
+  (locks && locks.projects || []).forEach(p => {
+    bits.push("Login unter " + p.path + " (Projekt " + p.name + ") gesperrt für " + Math.ceil(p.wait_seconds) + " s.");
+  });
+  return bits.join(" ");
+}
+async function loadLogs(){
+  const res = await fetch("/api/setup/logs");
+  if (res.status === 401) { location.href = "/login?next=/setup"; return; }
+  const d = await res.json().catch(() => ({}));
+  document.getElementById("logtext").textContent = d.text || "";
+  if (d.level) document.getElementById("loglevel").value = d.level;
 }
 async function loadMain(){
   const res = await fetch("/api/setup/state");
@@ -172,32 +284,34 @@ async function loadMain(){
   document.getElementById("who").textContent = s.username;
   document.getElementById("active").textContent = (s.running_projects || []).join(", ") || "–";
   document.getElementById("port").value = s.runtime.port;
+  document.getElementById("pubhost").value = s.runtime.public_host || "";
+  document.getElementById("pubhttps").checked = !!s.runtime.public_https;
+  if (s.log_level) document.getElementById("loglevel").value = s.log_level;
   const n = s.network || {};
   document.getElementById("netinfo").textContent =
     "Einrichtung Bind: " + (n.bind_host || "") + ":" + (s.runtime.port || "") +
-    (n.local_ip ? " · LAN-IP " + n.local_ip : "");
+    (n.local_ip ? " · LAN-IP " + n.local_ip : "") +
+    (n.public_origin ? " · Öffentlich " + n.public_origin : "");
   document.getElementById("ffmpeg").textContent = s.ffmpeg ? "gefunden" : "nicht installiert (Videos bleiben Original)";
+  const lockbox = document.getElementById("lockbox");
+  const lockText = lockHtml(s.locks);
+  lockbox.textContent = lockText;
+  lockbox.hidden = !lockText;
   const list = document.getElementById("plist");
   list.innerHTML = s.projects.map(projectCard).join("") || "<p class='muted'>Keine Projekte</p>";
+  paintLinkSwitch();
   list.querySelectorAll("[data-name]").forEach(card => {
     const name = card.getAttribute("data-name");
-    const modeEl = card.querySelector(".pmode");
-    const pub = card.querySelector(".ppublic");
     const storeEl = card.querySelector(".pstore");
     const folder = card.querySelector(".pfolder");
-    modeEl.onchange = () => { pub.style.display = modeEl.value === "public" ? "block" : "none"; };
     storeEl.onchange = () => { folder.style.display = storeEl.value === "folder" ? "block" : "none"; };
     card.querySelector(".saveNet").onclick = async () => {
       const res = await fetch("/api/projects/" + encodeURIComponent(name) + "/network", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({
-          network_mode: modeEl.value,
-          public_host: card.querySelector(".phost").value,
-          public_https: card.querySelector(".phttps").checked
-        })
+        body: JSON.stringify({network_mode: card.querySelector(".pmode").value})
       });
-      if (!res.ok) { const d = await res.json().catch(()=>({})); showErr("err", d.detail || "Netzwerk speichern fehlgeschlagen"); return; }
+      if (!res.ok) { const d = await res.json().catch(()=>({})); showErr("err", detailMsg(d) || "Netzwerk speichern fehlgeschlagen"); return; }
       loadMain();
     };
     card.querySelector(".saveStore").onclick = async () => {
@@ -210,7 +324,7 @@ async function loadMain(){
         })
       });
       const d = await res.json().catch(()=>({}));
-      if (!res.ok) { showErr("err", d.detail || "Speicher speichern fehlgeschlagen"); return; }
+      if (!res.ok) { showErr("err", detailMsg(d) || "Speicher speichern fehlgeschlagen"); return; }
       loadMain();
     };
     card.querySelector(".savePin").onclick = async () => {
@@ -221,7 +335,7 @@ async function loadMain(){
         body: JSON.stringify({pin})
       });
       const d = await res.json().catch(()=>({}));
-      if (!res.ok) { showErr("err", d.detail || "PIN speichern fehlgeschlagen"); return; }
+      if (!res.ok) { showErr("err", detailMsg(d) || "PIN speichern fehlgeschlagen"); return; }
       card.querySelector(".ppin").value = "";
       loadMain();
     };
@@ -229,14 +343,14 @@ async function loadMain(){
     if (actStart) actStart.onclick = async () => {
       const res = await fetch("/api/projects/" + encodeURIComponent(name) + "/start", {method: "POST"});
       const d = await res.json().catch(()=>({}));
-      if (!res.ok) { showErr("err", d.detail || "Start fehlgeschlagen"); return; }
+      if (!res.ok) { showErr("err", detailMsg(d) || "Start fehlgeschlagen"); return; }
       loadMain();
     };
     const actStop = card.querySelector(".stop");
     if (actStop) actStop.onclick = async () => {
       const res = await fetch("/api/projects/" + encodeURIComponent(name) + "/stop", {method: "POST"});
       const d = await res.json().catch(()=>({}));
-      if (!res.ok) { showErr("err", d.detail || "Stop fehlgeschlagen"); return; }
+      if (!res.ok) { showErr("err", detailMsg(d) || "Stop fehlgeschlagen"); return; }
       loadMain();
     };
     const savePortProj = card.querySelector(".savePortProj");
@@ -247,7 +361,7 @@ async function loadMain(){
         body: JSON.stringify({port: parseInt(card.querySelector(".pport").value, 10)})
       });
       const d = await res.json().catch(()=>({}));
-      if (!res.ok) { showErr("err", d.detail || "Port speichern fehlgeschlagen"); return; }
+      if (!res.ok) { showErr("err", detailMsg(d) || "Port speichern fehlgeschlagen"); return; }
       loadMain();
     };
   });
@@ -255,6 +369,48 @@ async function loadMain(){
   document.getElementById("sys").textContent =
     (sys.cpu_percent != null ? ("CPU " + sys.cpu_percent + "% · RAM " + sys.ram_percent + "%") : "");
 }
+document.getElementById("tabProjectsBtn").onclick = () => showTab("projects");
+document.getElementById("tabLogsBtn").onclick = () => showTab("logs");
+document.getElementById("linksLocal").onclick = () => {
+  linkMode = "local";
+  localStorage.setItem("pfSetupLinkMode", linkMode);
+  loadMain();
+};
+document.getElementById("linksPublic").onclick = () => {
+  linkMode = "public";
+  localStorage.setItem("pfSetupLinkMode", linkMode);
+  loadMain();
+};
+document.getElementById("savePublic").onclick = async () => {
+  const res = await fetch("/api/runtime", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      public_host: document.getElementById("pubhost").value,
+      public_https: document.getElementById("pubhttps").checked
+    })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) { showErr("err", detailMsg(data) || "Adresse speichern fehlgeschlagen"); return; }
+  loadMain();
+};
+document.getElementById("saveLevel").onclick = async () => {
+  const res = await fetch("/api/runtime", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({log_level: document.getElementById("loglevel").value})
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) { showErr("err", detailMsg(data) || "Level speichern fehlgeschlagen"); return; }
+  loadLogs();
+};
+document.getElementById("refreshLogs").onclick = () => loadLogs();
+document.getElementById("downloadLogs").onclick = () => { location.href = "/api/setup/logs/download"; };
+document.getElementById("clearLogs").onclick = async () => {
+  if (!confirm("Protokoll leeren?")) return;
+  await fetch("/api/setup/logs", {method: "DELETE"});
+  loadLogs();
+};
 document.getElementById("init").onsubmit = async (e) => {
   e.preventDefault();
   if (document.getElementById("password").value !== document.getElementById("password2").value) {
@@ -271,7 +427,8 @@ document.getElementById("init").onsubmit = async (e) => {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    showErr("initerr", typeof data.detail === "string" ? data.detail : "Einrichtung fehlgeschlagen.");
+    showErr("initerr", detailMsg(data) || "Einrichtung fehlgeschlagen.");
+    setWaitEl("initwait", "initbtn", detailWait(data), "Anmeldung unter /setup gesperrt");
     return;
   }
   if (data.restart && data.setup_url) {
@@ -287,7 +444,7 @@ document.getElementById("savePort").onclick = async () => {
     body: JSON.stringify({port: parseInt(document.getElementById("port").value, 10)})
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) { showErr("err", data.detail || "Port speichern fehlgeschlagen"); return; }
+  if (!res.ok) { showErr("err", detailMsg(data) || "Port speichern fehlgeschlagen"); return; }
   if (data.restart && data.setup_url) {
     beginPortWait(data.setup_url, data.wait_seconds);
     return;
@@ -302,7 +459,7 @@ document.getElementById("addproj").onclick = async () => {
     body: JSON.stringify({name})
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) { showErr("err", data.detail || "Anlegen fehlgeschlagen"); return; }
+  if (!res.ok) { showErr("err", detailMsg(data) || "Anlegen fehlgeschlagen"); return; }
   document.getElementById("newproj").value = "";
   loadMain();
 };
@@ -324,7 +481,7 @@ document.getElementById("importfile").onchange = async () => {
   fd.append("file", file);
   const res = await fetch("/api/projects/import", {method: "POST", body: fd});
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) { showErr("err", data.detail || "Laden fehlgeschlagen"); return; }
+  if (!res.ok) { showErr("err", detailMsg(data) || "Laden fehlgeschlagen"); return; }
   document.getElementById("newproj").value = "";
   loadMain();
 };
@@ -332,6 +489,9 @@ fetch("/api/setup/status").then(r => r.json()).then(s => {
   if (s.first_run) {
     document.getElementById("first").hidden = false;
     if (s.port) document.getElementById("initport").value = s.port;
+    if (s.init_lock && s.init_lock.locked) {
+      setWaitEl("initwait", "initbtn", s.init_lock.wait_seconds, "Anmeldung unter /setup gesperrt");
+    }
   } else loadMain();
 });
 </script>

@@ -4,6 +4,17 @@ Alle wesentlichen Änderungen am Local-browser-based-Photo-Frame werden in diese
 
 ---
 
+## [2.16.0] – 2026-09-07
+
+### Neu
+
+- Öffentliche Domain gilt serverweit unter `/setup`. Projekte im Modus Public nutzen sie plus `/{name}`; im Modus Network existiert `/{name}` am Steuer-Port nicht.
+- Einrichtung: Umschalter lokale/öffentliche Links; öffentliche URL auch bei gestopptem Public-Projekt.
+- Anmelde-Sperre für `/login` und Projekt-PIN mit Wartezeit; Hinweis unter `/setup`. Während der Sperre prüft der Server kein Passwort und keine PIN.
+- Protokoll der letzten 72 Stunden unter `/setup` (lesen, leeren, herunterladen, Log-Level).
+
+---
+
 ## [2.15.0] – 2026-09-07
 
 ### Neu

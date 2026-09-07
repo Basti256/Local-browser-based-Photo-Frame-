@@ -149,18 +149,27 @@ def _project_html_gate(request: Request):
 
 
 def _redirect_single_or_none(request: Request, dest: str):
-    running = runner.running_names()
+    from server.network import normalize_mode
+    from server.project import ProjectPaths, load_project_config
+    running = [
+        name for name in runner.running_names()
+        if normalize_mode(load_project_config(ProjectPaths(name)).get("network_mode")) == "public"
+    ]
     if len(running) == 1:
         return RedirectResponse(f"/{running[0]}{dest}", status_code=302)
     return _no_project()
 
 
 def _legacy_project_redirect(name: str, dest: str):
-    from server.project import find_project_by_slug
+    from server.network import normalize_mode
+    from server.project import ProjectPaths, find_project_by_slug, load_project_config
     found = find_project_by_slug(name)
     if not found:
         return _no_project()
     name = found
+    cfg = load_project_config(ProjectPaths(name))
+    if normalize_mode(cfg.get("network_mode")) != "public":
+        return HTMLResponse("Not Found", status_code=404)
     if not runner.is_running(name):
         return _stopped()
     if dest == "/":

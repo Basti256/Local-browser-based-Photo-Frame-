@@ -32,6 +32,8 @@ async def lifespan(app: FastAPI):
         print("Firewall konnte nicht geöffnet werden:", e)
     await runner.restore()
     print(f"[Runtime] running={runner.running_names() or '-'}")
+    from server.applog import log
+    log("INFO", f"Server gestartet bind={bind} port={port}")
     yield
     await runner.stop_all()
     try:
@@ -49,7 +51,14 @@ async def bind_project_port(request: Request, call_next):
     try:
         if control_only_blocked(request.scope, request.url.path):
             return setup_redirect_response(request)
-        return await call_next(request)
+        response = await call_next(request)
+        try:
+            from server.applog import log_request
+            log_path = (request.scope.get("state") or {}).get("log_path") or request.url.path
+            log_request(request.method, log_path, response.status_code)
+        except Exception:
+            pass
+        return response
     finally:
         reset_request_context(t_proj, t_pref)
 

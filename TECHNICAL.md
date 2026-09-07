@@ -3,7 +3,7 @@
 Handbuch der Software. Funktionen, Schnittstellen, Ports, Betrieb.
 Keine personenbezogenen Daten. Keine Zugangsdaten.
 
-Version des beschriebenen Stands: 2.15.0
+Version des beschriebenen Stands: 2.16.0
 
 ---
 
@@ -50,7 +50,7 @@ Port ohne `--port`: `data/runtime.json` Feld `port`, Standard 8000. Das ist der 
 
 Nach dem Neustart startet der Prozess die in `running_projects` eingetragenen Projekte wieder.
 
-Bind-Adresse gilt nach diesem Neustart. Die Anzeige-URL (QR-Code) im Modus `network` nutzt den Projekt-Port. Im Modus `public` die Domain plus `/{name}` am Steuer-Port, ohne Projekt-Port.
+Bind-Adresse gilt nach diesem Neustart. Die Anzeige-URL (QR-Code) im Modus `network` nutzt nur den Projekt-Port. `/{name}` am Steuer-Port existiert in diesem Modus nicht. Im Modus `public` gilt die serverweite Domain (`public_host` in der Runtime) plus `/{name}` am Steuer-Port, ohne Projekt-Port.
 
 Wall, Upload und Admin eines Projekts sind nur erreichbar, solange das Projekt unter `/setup` gestartet ist. Mehrere Projekte gleichzeitig: am Steuer-Port über verschiedene Pfade, im LAN je auf dem Projekt-Port. Einrichtung, Login und projektverwaltende APIs nur auf dem Steuer-Port, nicht unter `/{name}/`.
 
@@ -87,7 +87,7 @@ Wall, Upload und Admin eines Projekts sind nur erreichbar, solange das Projekt u
 
 `network_mode` `local`, `internal` → `network`. `tunnel` → `public`.
 
-Am Steuer-Port: `/{name}/wall`, `/{name}/upload`, `/{name}/admin`. Am Projekt-Port: `/wall` ohne Prefix. `/setup` nur am Steuer-Port.
+Am Steuer-Port im Modus `public`: `/{name}/wall`, `/{name}/upload`, `/{name}/admin`. Im Modus `network` existiert dieser Pfad nicht (404). Am Projekt-Port: `/wall` ohne Prefix. `/setup` nur am Steuer-Port.
 
 ---
 
@@ -97,9 +97,11 @@ Ablage unter `data/`. Nicht in der Versionskontrolle (nur leeres Verzeichnis mit
 
 | Datei | Inhalt |
 |-------|--------|
-| `runtime.json` | `port` (Einrichtung), `bind_host`, `active_project`, `running_projects` |
+| `runtime.json` | `port` (Einrichtung), `bind_host`, `active_project`, `running_projects`, `public_host`, `public_https`, `log_level` |
 | `auth.json` | Benutzer `Admin`, Passwort-Hash. Kein Klartext-Passwort. |
 | `secret.key` | Schlüssel für Session-Signatur |
+| `login_lock.json` | Fehlversuche und Sperrzeit für Setup-Login und Erstkonfiguration |
+| `app.log` | Protokoll der letzten 72 Stunden, ohne Passwörter oder PINs |
 
 `projects/` ebenfalls lokal, nicht im Git (nur `.gitkeep`). Pro Projekt `config.json`, `access.json` (PIN-Hash, versiegelter Anzeigewert, Fehlzählung, Sperrzeit; keine Klartext-Ziffern), `media/`, `derived/`, `header/`, `background/`. Die PIN-Anzeige erfolgt nur über `/api/setup/state` (Master).
 
@@ -129,7 +131,7 @@ Gilt für `/setup` und projektverwaltende APIs. Es gibt genau ein Konto `Admin`.
 - Login: `GET /login`, `POST /api/login` (nur Passwort)
 - Logout: `GET /logout`, `POST /api/logout`
 - Cookie `pf_session`, HttpOnly, SameSite=Lax, Secure bei HTTPS, Path `/`, 7 Tage
-- Fehlversuche Login: 5 je Client-Adresse in 15 Minuten, dann HTTP 429
+- Fehlversuche Login und PIN: Wartezeit `min(3600, 2^n)` Sekunden. Während der Sperre keine Passwort- oder PIN-Prüfung. Die Einrichtung zeigt die Sperre inkl. Restzeit.
 - Passwort: mindestens 10 Zeichen, ungleich `Admin`, Speicherung Argon2id
 
 ### Admin-PIN (Projekt)
@@ -139,14 +141,14 @@ Gilt für `/admin` und schreibende Admin-APIs des aktiven Projekts. Beim Anlegen
 - Freischalten: `POST /api/admin/unlock`
 - Cookie `pf_admin`, HttpOnly, SameSite=Lax, gebunden an den Projektnamen, Path `/{name}` am Steuer-Port bzw. `/` am Projekt-Port, 12 Stunden
 - Logout: `GET /admin/logout`
-- Unbegrenzt Versuche. Nach Fehlversuch n: Wartezeit `min(3600, 2^n)` Sekunden (erster Fehler: 2 s). Die Wartezeit gilt projektweit. Korrekter PIN setzt den Zähler zurück.
+- Nach Fehlversuch n: Wartezeit `min(3600, 2^n)` Sekunden (erster Fehler: 2 s). Während der Sperre keine PIN-Prüfung. Die Wartezeit gilt projektweit. Korrekter PIN setzt den Zähler zurück.
 - Fehlt ein PIN (ältere Projekte): die Einrichtung erzeugt beim nächsten Laden einen neuen 4-stelligen PIN.
 
 Zustandsändernde authentifizierte Anfragen: Origin muss zur Server-Basis-URL passen oder fehlen.
 
 ### Geschützt (Master)
 
-`/setup` nach Erststart. APIs: `/api/setup/state`, `/api/projects*`, `/api/runtime`, `/api/system`, `POST /api/login` (rate-limited).
+`/setup` nach Erststart. APIs: `/api/setup/state`, `/api/setup/logs`, `/api/projects*`, `/api/runtime`, `/api/system`. `POST /api/login` mit Sperre nach Fehlversuchen.
 
 ### Geschützt (PIN)
 
@@ -162,27 +164,27 @@ Zustandsändernde authentifizierte Anfragen: Origin muss zur Server-Basis-URL pa
 
 Basis: Steuer-Port `http://<host>:<steuer-port>`. Reverse-Proxy/Tunnel spricht nur diesen Port. Öffentliche Pfade nutzen denselben Host.
 
-Projektseiten, APIs, WebSocket, Medien und `sw.js` hängen am Steuer-Port unter `/{name}/…` (HTML setzt `meta name="pf-base"`). Am LAN-Projekt-Port dieselben Pfade ohne Prefix.
+Projektseiten, APIs, WebSocket, Medien und `sw.js` hängen am Steuer-Port nur im Modus `public` unter `/{name}/…` (HTML setzt `meta name="pf-base"`). Am LAN-Projekt-Port dieselben Pfade ohne Prefix.
 
 ### Seiten
 
 | Methode | Pfad | Funktion |
 |---------|------|----------|
 | GET | `/` | Am Steuer-Port: Umleitung auf `/setup`. Am Projekt-Port oder unter `/{name}`: Wall |
-| GET | `/{name}/wall` | Fly oder Grid, wenn das Projekt läuft. Gestoppt: Hinweisseite. Unbekannt: keine-Projekt-Seite |
-| GET | `/{name}/upload` | Gäste-Upload |
-| GET | `/{name}/admin` | Wand-Einstellungen (Reiter), nach PIN |
+| GET | `/{name}/wall` | Nur Modus `public` am Steuer-Port. Fly oder Grid, wenn das Projekt läuft. Gestoppt: Hinweisseite. Unbekannt oder Modus `network`: 404 |
+| GET | `/{name}/upload` | Gäste-Upload (nur `public` am Steuer-Port) |
+| GET | `/{name}/admin` | Wand-Einstellungen, nach PIN |
 | GET | `/{name}/admin/classic` | Vorherige Admin-HTML, nach PIN |
 | GET | `/{name}/admin/browser` | Medienbrowser, nach PIN |
 | GET | `/{name}/admin/logout` | PIN-Sitzung löschen |
-| GET | `/wall` | Am Projekt-Port: Wall. Am Steuer-Port ohne Prefix: Umleitung auf das einzige laufende `/{name}/wall` oder Hinweisseite |
+| GET | `/wall` | Am Projekt-Port: Wall. Am Steuer-Port ohne Prefix: Umleitung auf das einzige laufende Public-Projekt oder Hinweisseite |
 | GET | `/upload` | Am Projekt-Port: Upload |
 | GET | `/admin` | Am Projekt-Port: Admin |
-| GET | `/p/{name}/wall` | 302 auf `/{name}/wall` (gleicher Host, ohne Projekt-Port) |
-| GET | `/p/{name}/upload` | 302 auf `/{name}/upload` |
-| GET | `/p/{name}/admin` | 302 auf `/{name}/admin` |
-| GET | `/p/{name}/browser` | 302 auf `/{name}/admin/browser` |
-| GET | `/setup` | Erststart und Projektverwaltung |
+| GET | `/p/{name}/wall` | Modus `public`: 302 auf `/{name}/wall`. Modus `network`: 404 |
+| GET | `/p/{name}/upload` | Entsprechend Upload |
+| GET | `/p/{name}/admin` | Entsprechend Admin |
+| GET | `/p/{name}/browser` | Entsprechend Medienbrowser |
+| GET | `/setup` | Erststart, Projekte, Protokoll |
 | GET | `/login` | Anmeldung als Admin |
 | GET | `/logout` | Master-Session löschen |
 
@@ -201,6 +203,10 @@ Unter `/{name}/` gelten dieselben APIs und Dateipfade wie ohne Prefix: `/ws`, `/
 | POST | `/api/login` | nein |
 | POST | `/api/logout` | Session |
 | GET | `/api/setup/state` | Master |
+| GET | `/api/setup/logs` | Master, Protokolltext |
+| DELETE | `/api/setup/logs` | Master, leeren |
+| GET | `/api/setup/logs/download` | Master, Datei |
+| POST | `/api/runtime` | Master, Port, öffentliche Adresse, Log-Level |
 | POST | `/api/projects` | Master, leeres Projekt anlegen |
 | POST | `/api/projects/import` | Master, ZIP oder `config.json`; neues Projekt |
 | GET | `/api/projects/{name}/export` | Master, ZIP nur Config und Hintergrund-/Header-Bilder |
@@ -228,14 +234,14 @@ Unter `/{name}/` gelten dieselben APIs und Dateipfade wie ohne Prefix: `/ws`, `/
 
 ## 9. Netzwerkmodi
 
-Feld `network_mode` in `projects/<name>/config.json`. Zulässig: `network`, `public`.
+Feld `network_mode` in `projects/<name>/config.json`. Zulässig: `network`, `public`. Die Domain steht in `data/runtime.json` (`public_host`, `public_https`).
 
-| Wert | Anzeige-URL (QR, Links) |
-|------|-------------------------|
-| `network` | `http://<lokale-IPv4>:<projekt-port>` |
-| `public` | `https://<public_host>/{name}` bzw. `http://<public_host>/{name}`. Nie der Projekt-Port. Reverse-Proxy nur auf den Steuer-Port. |
+| Wert | Anzeige-URL (QR, Links) | Steuer-Port `/{name}` |
+|------|-------------------------|------------------------|
+| `network` | `http://<lokale-IPv4>:<projekt-port>` | existiert nicht (404) |
+| `public` | `https://<public_host>/{name}` bzw. `http://<public_host>/{name}` | ausliefern |
 
-Die Anwendung nimmt selbst nur HTTP entgegen. Der Schalter HTTPS ändert ausschließlich die ausgegebenen URLs. QR-Code Upload im Public-Modus: `https://<host>/{name}/upload`.
+Die Anwendung nimmt selbst nur HTTP entgegen. Der Schalter HTTPS ändert ausschließlich die ausgegebenen URLs. QR-Code Upload im Public-Modus: `https://<host>/{name}/upload`. Reverse-Proxy nur auf den Steuer-Port.
 
 Lokale IPv4: UDP zu `8.8.8.8`. Externe IP nur als Fallback, wenn Public ohne Host.
 

@@ -52,6 +52,11 @@ def resolve_control_path(path: str, running: set[str] | None = None) -> PrefixRe
                 status=STATUS_MISSING,
             )
         return PrefixResult(path=path, project=None, prefix="", status=None)
+    from server.network import normalize_mode
+    from server.project import ProjectPaths, load_project_config
+    cfg = load_project_config(ProjectPaths(name))
+    if normalize_mode(cfg.get("network_mode")) != "public":
+        return PrefixResult(path=path, project=None, prefix="", status=None)
     prefix = "/" + name
     redirect = None
     if first != name:
@@ -102,6 +107,7 @@ def bind_project_scope(scope: Scope) -> Scope:
     path = scope.get("path") or "/"
     port = _scope_port(scope)
     port_project = runner.project_for_port(port) if port is not None else None
+    state["log_path"] = path
     if port_project:
         state["project_name"] = port_project
         state["url_prefix"] = ""

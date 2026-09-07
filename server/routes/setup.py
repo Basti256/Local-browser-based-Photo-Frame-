@@ -11,11 +11,22 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
+from server.applog import clear_log, current_level_name, log, log_path, read_log
 from server.auth import SETUP_USERNAME, create_user, has_user, set_session
 from server.defaults import NETWORK_MODES, STORAGE_MODES
 from server.deps import require_user
-from server.network import advertised_base_url, get_network_info, normalize_mode, sanitize_public_host
-from server.pin import ensure_project_pin, has_pin, set_pin
+from server.lockout import clear_failures, record_failure, refuse_if_locked, status as lock_status
+from server.network import (
+    advertised_base_url,
+    get_network_info,
+    lan_base_url,
+    migrate_server_public_host,
+    normalize_mode,
+    public_base_url,
+    public_origin,
+    sanitize_public_host,
+)
+from server.pin import ensure_project_pin, has_pin, set_pin, wait_seconds_remaining
 from server.project import (
     IMAGE_EXT,
     ProjectPaths,
@@ -53,6 +64,9 @@ class RuntimeBody(BaseModel):
     port: int | None = None
     bind_host: str | None = None
     active_project: str | None = None
+    public_host: str | None = None
+    public_https: bool | None = None
+    log_level: str | None = None
 
 
 class ProjectNetworkBody(BaseModel):
@@ -74,11 +88,16 @@ class ProjectStorageBody(BaseModel):
     storage_path: str = ""
 
 
-def _apply_network(paths: ProjectPaths, mode: str, public_host: str, public_https: bool) -> dict:
+def _apply_network(paths: ProjectPaths, mode: str) -> dict:
     cfg = load_project_config(paths)
     cfg["network_mode"] = normalize_mode(mode)
-    cfg["public_host"] = sanitize_public_host(public_host)
-    cfg["public_https"] = bool(public_https) if cfg["network_mode"] == "public" else False
+    rt = load_runtime()
+    if cfg["network_mode"] == "public":
+        cfg["public_host"] = sanitize_public_host(rt.get("public_host") or "")
+        cfg["public_https"] = bool(rt.get("public_https"))
+    else:
+        cfg["public_host"] = ""
+        cfg["public_https"] = False
     save_project_config(paths, cfg)
     return cfg
 
@@ -90,6 +109,8 @@ def setup_status():
         "first_run": not has_user(),
         "has_project": bool(list_projects()),
         "port": rt.get("port", 8000),
+        "login_lock": lock_status("setup", "/login"),
+        "init_lock": lock_status("init", "/setup"),
     }
 
 
@@ -97,13 +118,26 @@ def setup_status():
 def setup_init(body: InitBody, request: Request):
     if has_user():
         raise HTTPException(status_code=409, detail="Bereits eingerichtet.")
+    refuse_if_locked("init", "/setup")
     port = None
     if body.port is not None:
         try:
             port = parse_port(body.port)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
-    create_user(body.password)
+    try:
+        create_user(body.password)
+    except HTTPException as e:
+        wait = record_failure("init")
+        log("WARNING", "Erstkonfiguration fehlgeschlagen")
+        if isinstance(e.detail, dict):
+            raise
+        raise HTTPException(
+            status_code=e.status_code,
+            detail={"message": str(e.detail), "wait_seconds": wait, "path": "/setup"},
+        ) from e
+    clear_failures("init")
+    log("INFO", "Erstkonfiguration abgeschlossen")
     old_port = listen_port()
     if port is not None:
         update_runtime(port=port)
@@ -124,29 +158,38 @@ def setup_init(body: InitBody, request: Request):
 
 @router.get("/api/setup/state")
 def setup_state(_user: str = Depends(require_user)):
+    migrate_server_public_host()
     rt = load_runtime()
     names = list_projects()
     projects = []
+    setup_lock = lock_status("setup", "/login")
     for name in names:
         p = ProjectPaths(name)
         cfg = load_project_config(p)
+        mode = normalize_mode(cfg.get("network_mode"))
         media_count = 0
         if p.media.is_dir():
             media_count = sum(1 for f in p.media.iterdir() if f.is_file() and f.suffix.lower() != ".txt")
+        pin_wait = round(wait_seconds_remaining(p), 1)
         projects.append({
             "name": name,
             "running": runner.is_running(name),
             "active": runner.is_running(name),
             "media_count": media_count,
             "port": project_listen_port(p, cfg),
-            "network_mode": normalize_mode(cfg.get("network_mode")),
-            "public_host": sanitize_public_host(cfg.get("public_host") or ""),
-            "public_https": bool(cfg.get("public_https")),
+            "network_mode": mode,
             "storage_mode": cfg.get("storage_mode") or "project",
             "storage_path": cfg.get("storage_path") or "",
             "has_pin": has_pin(p),
             "pin": ensure_project_pin(p),
+            "local_url": lan_base_url(cfg),
+            "public_url": public_base_url(name) if mode == "public" else "",
             "base_url": advertised_base_url(cfg, name=name),
+            "pin_lock": {
+                "locked": pin_wait > 0,
+                "wait_seconds": pin_wait,
+                "path": f"/{name}/admin",
+            },
         })
     return {
         "version": __version__,
@@ -158,6 +201,15 @@ def setup_state(_user: str = Depends(require_user)):
         "ffmpeg": ffmpeg_bin() is not None,
         "modes": list(NETWORK_MODES),
         "storage_modes": list(STORAGE_MODES),
+        "locks": {
+            "setup": setup_lock,
+            "projects": [
+                {"name": p["name"], **p["pin_lock"]}
+                for p in projects if p["pin_lock"]["locked"]
+            ],
+        },
+        "log_level": current_level_name(),
+        "public_origin": public_origin(),
     }
 
 
@@ -206,13 +258,16 @@ def api_project_network(name: str, body: ProjectNetworkBody, _user: str = Depend
     paths = ProjectPaths(name)
     if not paths.config_file.is_file():
         raise HTTPException(status_code=404, detail="Projekt nicht gefunden.")
-    cfg = _apply_network(paths, body.network_mode, body.public_host, body.public_https)
+    cfg = _apply_network(paths, body.network_mode)
+    log("INFO", f"Netzwerk {name} {cfg['network_mode']}")
     return {
         "ok": True,
         "network_mode": cfg["network_mode"],
         "public_host": cfg["public_host"],
         "public_https": cfg["public_https"],
         "base_url": advertised_base_url(cfg, name=name),
+        "public_url": public_base_url(name) if cfg["network_mode"] == "public" else "",
+        "local_url": lan_base_url(cfg),
     }
 
 
@@ -364,7 +419,7 @@ def api_export_project(name: str, _user: str = Depends(require_user)):
     return StreamingResponse(
         buf,
         media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": "attachment; filename=\"" + filename + "\""},
     )
 
 
@@ -385,17 +440,64 @@ def api_runtime(
             raise HTTPException(status_code=409, detail="Port ist einem Projekt zugeordnet.")
     if body.bind_host is not None:
         kwargs["bind_host"] = body.bind_host
+    if body.public_host is not None:
+        kwargs["public_host"] = sanitize_public_host(body.public_host)
+    if body.public_https is not None:
+        kwargs["public_https"] = bool(body.public_https)
+    if body.log_level is not None:
+        level = str(body.log_level).upper()
+        if level not in ("DEBUG", "INFO", "WARNING", "ERROR"):
+            raise HTTPException(status_code=400, detail="Log-Level: DEBUG, INFO, WARNING oder ERROR.")
+        kwargs["log_level"] = level
     rt = update_runtime(**kwargs) if kwargs else load_runtime()
     new_port = int(rt["port"])
     changed = "port" in kwargs and new_port != old_port
     if changed:
         schedule_restart()
+    if "public_host" in kwargs or "public_https" in kwargs:
+        log("INFO", "Öffentliche Server-Adresse gespeichert")
+        for name in list_projects():
+            paths = ProjectPaths(name)
+            cfg = load_project_config(paths)
+            if normalize_mode(cfg.get("network_mode")) == "public":
+                _apply_network(paths, "public")
+    if "log_level" in kwargs:
+        log("INFO", f"Log-Level {rt.get('log_level')}")
     return {
         "ok": True,
         "runtime": rt,
         "port": new_port,
         **restart_fields(request, new_port, changed),
     }
+
+
+@router.get("/api/setup/logs")
+def api_setup_logs(_user: str = Depends(require_user)):
+    return {
+        "ok": True,
+        "level": current_level_name(),
+        "text": read_log(),
+    }
+
+
+@router.delete("/api/setup/logs")
+def api_setup_logs_clear(_user: str = Depends(require_user)):
+    clear_log()
+    return {"ok": True, "text": read_log(), "level": current_level_name()}
+
+
+@router.get("/api/setup/logs/download")
+def api_setup_logs_download(_user: str = Depends(require_user)):
+    path = log_path()
+    data = read_log().encode("utf-8")
+    filename = path.name
+    buf = io.BytesIO(data)
+    disposition = 'attachment; filename="' + filename + '"'
+    return StreamingResponse(
+        buf,
+        media_type="text/plain; charset=utf-8",
+        headers={"Content-Disposition": disposition},
+    )
 
 
 @router.get("/api/system")
