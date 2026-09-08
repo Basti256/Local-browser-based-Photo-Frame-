@@ -6,7 +6,7 @@ import json
 import time
 from collections import defaultdict
 
-from fastapi import APIRouter, Depends, WebSocket
+from fastapi import APIRouter, Depends, HTTPException, WebSocket
 
 from server import stats
 from server.context import get_current_project, reset_current_project, set_current_project, set_url_prefix
@@ -41,6 +41,25 @@ async def broadcast(filename: str, project: str | None = None) -> None:
     for d in dead:
         if d in clients[name]:
             clients[name].remove(d)
+
+
+async def disconnect_project(name: str | None = None) -> None:
+    name = name or get_current_project()
+    if not name:
+        return
+    for ws in list(clients.get(name) or []):
+        try:
+            await ws.close(code=1001)
+        except Exception:
+            pass
+    clients[name] = []
+
+
+def require_live_project() -> str:
+    name = get_current_project()
+    if not name or not runner.is_running(name):
+        raise HTTPException(status_code=503, detail="stopped")
+    return name
 
 
 HIDE_PREFIX = "__hide__:"
@@ -82,9 +101,10 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     clients[name].append(websocket)
     try:
+        await websocket.send_text("__ping__")
         while True:
             try:
-                msg = await asyncio.wait_for(websocket.receive_text(), timeout=12)
+                msg = await asyncio.wait_for(websocket.receive_text(), timeout=8)
             except asyncio.TimeoutError:
                 await websocket.send_text("__ping__")
                 continue
@@ -95,6 +115,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     st["images"] = data.get("images", 0)
                     st["videos"] = data.get("videos", 0)
                     st["updated"] = time.time()
+                    await websocket.send_text("__ping__")
             except (json.JSONDecodeError, TypeError):
                 pass
     except Exception:
@@ -113,7 +134,7 @@ def upload_url():
 
 
 @router.get("/api/images")
-def list_images():
+def list_images(_live: str = Depends(require_live_project)):
     paths = get_paths()
     if paths is None or not paths.media.is_dir():
         return []
@@ -137,7 +158,7 @@ def list_images():
 
 
 @router.get("/api/config")
-def get_config():
+def get_config(_live: str = Depends(require_live_project)):
     paths = get_paths()
     if paths is None:
         from server.defaults import DEFAULT_CONFIG

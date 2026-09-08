@@ -140,6 +140,15 @@
     if (!bar) {
       bar = document.createElement("div");
       bar.id = "debugWallRotate";
+      var clearBtn = document.createElement("button");
+      clearBtn.id = "debugClearCache";
+      clearBtn.type = "button";
+      clearBtn.textContent = "Cache leeren";
+      clearBtn.addEventListener("click", function () {
+        if (typeof global.clearWallMediaCache === "function") global.clearWallMediaCache();
+      });
+      var row = document.createElement("div");
+      row.className = "debugWallRotateRow";
       var lab = document.createElement("label");
       lab.setAttribute("for", "debugWallRotateSel");
       lab.textContent = "Debug drehen";
@@ -163,10 +172,21 @@
       });
       var hint = document.createElement("span");
       hint.className = "debugWallRotateHint";
-      bar.appendChild(lab);
-      bar.appendChild(sel);
-      bar.appendChild(hint);
+      row.appendChild(lab);
+      row.appendChild(sel);
+      row.appendChild(hint);
+      bar.appendChild(clearBtn);
+      bar.appendChild(row);
       document.body.appendChild(bar);
+    } else if (!document.getElementById("debugClearCache")) {
+      var extra = document.createElement("button");
+      extra.id = "debugClearCache";
+      extra.type = "button";
+      extra.textContent = "Cache leeren";
+      extra.addEventListener("click", function () {
+        if (typeof global.clearWallMediaCache === "function") global.clearWallMediaCache();
+      });
+      bar.insertBefore(extra, bar.firstChild);
     }
     var selEl = document.getElementById("debugWallRotateSel");
     var hintEl = bar.querySelector(".debugWallRotateHint");

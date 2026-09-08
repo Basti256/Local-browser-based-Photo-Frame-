@@ -431,7 +431,7 @@ const imageTypes=["jpg","jpeg","png","webp","gif"]
 const videoTypes=["mp4","mov","webm"]
 
 let serverStateChannel=null
-let serverOnline=true
+let serverOnline=false
 let cachedImages=new Set()
 let cacheInventory={images:0,videos:0,bytes:0}
 let cacheInventoryBusy=false
@@ -496,6 +496,40 @@ if(res) return res
 }catch(e){}
 return null
 }
+function wsIsOpen(){
+return !!(ws && ws.readyState===WebSocket.OPEN)
+}
+function useCachePool(){
+return !!(config&&config.cache_enabled&&!wsIsOpen())
+}
+async function fillMediaSrc(element, file){
+if(useCachePool()){
+let res=await cacheResponseForFile(file)
+if(!res){
+reservedImages.delete(file)
+reservedVideos.delete(file)
+addDebugLog("nicht im Cache: "+file)
+return false
+}
+element.src=URL.createObjectURL(await res.blob())
+addDebugLog("aus Cache: "+file)
+return true
+}
+bindCacheFallback(element, file)
+element.src=mediaSrc(file)
+return true
+}
+async function clearWallMediaCache(){
+try{
+await caches.delete("wall-media-v1")
+await caches.delete("wall-media-meta-v1")
+}catch(e){}
+cachedImages=new Set()
+cacheInventory={images:0,videos:0,bytes:0}
+addDebugLog("Cache geleert")
+if(typeof updateDebug==="function") updateDebug()
+}
+window.clearWallMediaCache=clearWallMediaCache
 function bindCacheFallback(element, file){
 let used=false
 element.addEventListener("error", async ()=>{
@@ -511,6 +545,12 @@ if(!res){
 reservedImages.delete(file)
 reservedVideos.delete(file)
 addDebugLog("nicht im Cache: "+file)
+if(config&&config.cache_enabled){
+setConnection("offline")
+let ext=(file.split(".").pop()||"").toLowerCase()
+if(videoTypes.includes(ext)) showRandomVideo()
+else showRandomImage()
+}
 return
 }
 try{
@@ -551,10 +591,16 @@ if(res){ let b=await res.blob(); sz=b.size||0 }
 bytes+=sz
 }
 cachedImages=next
-if(!serverOnline) next.forEach(ingestCachedFilename)
+if(!wsIsOpen()) next.forEach(ingestCachedFilename)
 cacheInventory={images:img,videos:vid,bytes:bytes}
 }catch(e){}
 cacheInventoryBusy=false
+}
+
+let lastWsRx=0
+
+function markWsAlive(){
+lastWsRx=Date.now()
 }
 
 function notifyServerState(state){
@@ -593,6 +639,7 @@ if(serverOnline) icon.style.opacity=0
 },5000)
 
 processHighlightQueue()
+catchUpMedia()
 
 }else{
 
@@ -616,18 +663,18 @@ let httpOk=false
 try{
 let ctrl=new AbortController()
 let t=setTimeout(()=>ctrl.abort(),2500)
-let res=await fetch("/api/version?pf="+Date.now(),{cache:"no-store",signal:ctrl.signal})
+let res=await fetch("/api/config?pf="+Date.now(),{cache:"no-store",signal:ctrl.signal})
 clearTimeout(t)
 httpOk=!!res.ok
 }catch(e){ httpOk=false }
 let wsOk=ws && ws.readyState===WebSocket.OPEN
-if(!httpOk){
+let wsFresh=wsOk && lastWsRx>0 && (Date.now()-lastWsRx)<15000
+if(httpOk && wsFresh) setConnection("online")
+else {
 if(serverOnline && wsOk){
 try{ ws.close() }catch(e){}
 }
 setConnection("offline")
-}else if(wsOk){
-setConnection("online")
 }
 }
 
@@ -642,14 +689,13 @@ ws=new WebSocket(
 
 ws.onopen = () => {
 
-setConnection("online")
 sendStats()
-catchUpMedia()
 
 }
 
 ws.onclose = () => {
 
+lastWsRx=0
 setConnection("offline")
 if(reconnectTimeout) clearTimeout(reconnectTimeout)
 reconnectTimeout=setTimeout(()=>{
@@ -720,8 +766,12 @@ addDebugLog("Cache-Liste: "+list.length+" Bilder verfügbar")
 ws.onmessage=async(event)=>{
 
 let msg=event.data
+markWsAlive()
 
-if(msg==="__ping__") return
+if(msg==="__ping__"){
+if(!serverOnline) connectionWatchdog()
+return
+}
 if(msg==="__config_reload__"){
 location.reload()
 return
@@ -981,7 +1031,7 @@ box.innerHTML =
 "VideoHighlights: "+currentVideoHighlights+" (Queue: "+videoHighlightQueue.length+")<br>"+
 "CenterHighlights: "+currentCenterHighlights+"<br>"+
 "Spawn: "+spawnLabel+"<br>"+
-"Verbindung: "+(serverOnline?"verbunden":"getrennt")+"<br>"+
+"Verbindung: "+(wsIsOpen()?"verbunden":"getrennt")+"<br>"+
 "Cache: "+cacheOn+(config.cache_enabled?" (TTL "+cacheTtl+"min, max "+(config.cache_max_images||100)+" Bilder)":"")+"<br>"+
 "Browser-Cache: "+cacheInventory.images+" Bilder, "+cacheInventory.videos+" Videos, "+fmtCacheBytes(cacheInventory.bytes)+" (nur schon angezeigte Dateien)<br>"+
 "Bildschirm wach: "+wakeLockStatus
@@ -1445,7 +1495,7 @@ return files
 function chooseRandomImage(){
 let displayed=getDisplayedMedia()
 let pool=images
-if(config.cache_enabled&&!serverOnline){
+if(config.cache_enabled&&useCachePool()){
 pool=cachedFilenames("image")
 if(pool.length===0) return null
 }else if(images.length===0) return null
@@ -1458,7 +1508,7 @@ return chosen
 function chooseRandomVideo(){
 let displayed=getDisplayedMedia()
 let pool=videos
-if(config.cache_enabled&&!serverOnline){
+if(config.cache_enabled&&useCachePool()){
 pool=cachedFilenames("video")
 if(pool.length===0) return null
 }else if(videos.length===0) return null
@@ -1697,7 +1747,6 @@ element=document.createElement("video")
 element.autoplay=true
 element.muted=true
 element.playsInline=true
-bindCacheFallback(element, file)
 
 
 let videoCanPlayHandled=false
@@ -1798,7 +1847,7 @@ startExitWatcher()
 
 }
 
-element.src=(typeof pfUrl==="function"?pfUrl("/media/"+file):("/media/"+file))
+void fillMediaSrc(element, file)
 
 if(config.video_playback_mode==="loop") element.loop=true
 
@@ -1982,11 +2031,11 @@ startExitWatcher()
 }
 
 if(!isVideo){
-bindCacheFallback(element, file)
-element.src=mediaSrc(file)
-if(element.complete && element.naturalWidth>0){
+void fillMediaSrc(element, file).then(ok=>{
+if(ok && element.complete && element.naturalWidth>0){
 try{ element.onload() }catch(e){}
 }
+})
 }
 
 }

@@ -4,6 +4,24 @@ Alle wesentlichen Änderungen am Local-browser-based-Photo-Frame werden in diese
 
 ---
 
+## [2.20.14] – 2026-09-08
+
+### Geändert
+
+- Wall: ohne offenes WebSocket kommen alle Bilder und Videos nur aus dem Browser-Cache, nicht mehr vom Server.
+- Debug-Overlay: Schaltfläche „Cache leeren“ über „Debug drehen“.
+
+---
+
+## [2.20.13] – 2026-09-08
+
+### Behoben
+
+- Wall bleibt nach einem Serverstopp nicht mehr fälschlich „verbunden“. Online nur noch bei laufendem Projekt (`GET /api/config`) und frischem WebSocket-Ping, nicht bei `ws.onopen` allein.
+- Ohne Verbindung wählt die Slideshow nur noch Dateien aus dem Browser-Cache. Schlägt ein Bild fehl, das nicht im Cache liegt, folgt als Nächstes ein gecachtes.
+
+---
+
 ## [2.20.12] – 2026-09-08
 
 ### Behoben

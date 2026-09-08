@@ -83,6 +83,11 @@ class ProjectRunner:
             print(f"[Projekt] {name} gestoppt")
             from server.applog import log
             log("INFO", f"Projekt gestoppt {name}")
+            try:
+                from server.routes.wall import disconnect_project
+                await disconnect_project(name)
+            except Exception:
+                pass
             return {"ok": True, "name": name, "running": False}
 
     async def stop_all(self) -> None:

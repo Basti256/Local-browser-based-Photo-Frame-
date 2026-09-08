@@ -136,7 +136,7 @@ const imageTypes=["jpg","jpeg","png","webp","gif"]
 const videoTypes=["mp4","mov","webm"]
 
 let serverStateChannel=null
-let serverOnline=true
+let serverOnline=false
 let wakeLockSentinel=null
 let wakeLockActive=false
 let altWakeLockVideo=null
@@ -199,6 +199,37 @@ if(res) return res
 }catch(e){}
 return null
 }
+function wsIsOpen(){
+return !!(ws && ws.readyState===WebSocket.OPEN)
+}
+function useCachePool(){
+return !!(config&&config.cache_enabled&&!wsIsOpen())
+}
+async function fillMediaSrc(element, file){
+if(useCachePool()){
+let res=await cacheResponseForFile(file)
+if(!res){
+addDebugLog("nicht im Cache: "+file)
+return false
+}
+element.src=URL.createObjectURL(await res.blob())
+addDebugLog("aus Cache: "+file)
+return true
+}
+element.src=mediaSrc(file)
+return true
+}
+async function clearWallMediaCache(){
+try{
+await caches.delete("wall-media-v1")
+await caches.delete("wall-media-meta-v1")
+}catch(e){}
+cachedImages=new Set()
+cacheInventory={images:0,videos:0,bytes:0}
+addDebugLog("Cache geleert")
+if(typeof updateDebug==="function") updateDebug()
+}
+window.clearWallMediaCache=clearWallMediaCache
 async function refreshCacheInventory(){
 if(!("caches" in window) || cacheInventoryBusy) return
 cacheInventoryBusy=true
@@ -227,10 +258,15 @@ if(res){ let b=await res.blob(); sz=b.size||0 }
 bytes+=sz
 }
 cachedImages=next
-if(!serverOnline) next.forEach(ingestCachedFilename)
+if(!wsIsOpen()) next.forEach(ingestCachedFilename)
 cacheInventory={images:img,videos:vid,bytes:bytes}
 }catch(e){}
 cacheInventoryBusy=false
+}
+
+let lastWsRx=0
+function markWsAlive(){
+lastWsRx=Date.now()
 }
 
 function notifyServerState(state){
@@ -260,6 +296,7 @@ connectionFadeTimer=setTimeout(()=>{
 connectionFadeTimer=null
 if(serverOnline) icon.style.opacity=0
 },5000)
+catchUpMedia()
 }else{
 icon.style.transition="none"
 icon.style.background="red"
@@ -278,18 +315,18 @@ let httpOk=false
 try{
 let ctrl=new AbortController()
 let t=setTimeout(()=>ctrl.abort(),2500)
-let res=await fetch("/api/version?pf="+Date.now(),{cache:"no-store",signal:ctrl.signal})
+let res=await fetch("/api/config?pf="+Date.now(),{cache:"no-store",signal:ctrl.signal})
 clearTimeout(t)
 httpOk=!!res.ok
 }catch(e){ httpOk=false }
 let wsOk=ws && ws.readyState===WebSocket.OPEN
-if(!httpOk){
+let wsFresh=wsOk && lastWsRx>0 && (Date.now()-lastWsRx)<15000
+if(httpOk && wsFresh) setConnection("online")
+else {
 if(serverOnline && wsOk){
 try{ ws.close() }catch(e){}
 }
 setConnection("offline")
-}else if(wsOk){
-setConnection("online")
 }
 }
 
@@ -334,7 +371,7 @@ box.innerHTML=
 "Bilder gesamt: "+total+"<br>"+
 "Durchlaufzeit: "+duration+"s<br>"+
 "Pool: "+images.length+" (Wiederholung erlaubt)<br>"+
-"Verbindung: "+(serverOnline?"verbunden":"getrennt")+"<br>"+
+"Verbindung: "+(wsIsOpen()?"verbunden":"getrennt")+"<br>"+
 "Cache: "+cacheOn+(config.cache_enabled?" (TTL "+cacheTtl+"min, max "+(config.cache_max_images||100)+" Bilder)":"")+"<br>"+
 "Browser-Cache: "+cacheInventory.images+" Bilder, "+cacheInventory.videos+" Videos, "+fmtCacheBytes(cacheInventory.bytes)+" (nur schon angezeigte Dateien)<br>"+
 "Bildschirm wach: "+wakeLockStatus
@@ -346,8 +383,9 @@ box.innerHTML+="<br>Log:<br>"+debugLogs.join("<br>")
 let reconnectTimeout=null
 function connectWebSocket(){
 ws=new WebSocket((location.protocol==="https:"?"wss://":"ws://")+location.host+"/ws")
-ws.onopen=()=>{ setConnection("online"); sendStats(); catchUpMedia() }
+ws.onopen=()=>{ sendStats() }
 ws.onclose=()=>{
+lastWsRx=0
 setConnection("offline")
 if(reconnectTimeout) clearTimeout(reconnectTimeout)
 reconnectTimeout=setTimeout(()=>{
@@ -411,7 +449,11 @@ addDebugLog("Cache-Liste: "+list.length+" Bilder verfügbar")
 })
 }
 ws.onmessage=async(event)=>{
-if(event.data==="__ping__") return
+markWsAlive()
+if(event.data==="__ping__"){
+if(!serverOnline) connectionWatchdog()
+return
+}
 if(event.data==="__config_reload__"){ location.reload(); return }
 if(event.data==="__media_sync__"){ await catchUpMedia(); return }
 if(event.data==="__config_updated__"){
@@ -490,7 +532,7 @@ return new Set(Array.from(document.querySelectorAll(".gridCell")).map(c=>c.datas
 function chooseRandomImage(){
 let displayed=getDisplayedImages()
 let pool=images
-if(config.cache_enabled&&!serverOnline){
+if(config.cache_enabled&&useCachePool()){
 pool=cachedFilenames("image")
 if(pool.length===0) return null
 }else if(images.length===0) return null
@@ -653,6 +695,7 @@ let col=parseInt(cell.dataset.colIndex,10)
 reservedImages.delete(file)
 cell.remove()
 addDebugLog("removed (load error) col "+col+": "+file)
+if(config&&config.cache_enabled) setConnection("offline")
 let spacingRow="grid_spacing_rows"in config?Math.max(0,parseInt(config.grid_spacing_rows)||0):(config.grid_spacing!=null?Math.max(0,parseInt(config.grid_spacing)||0):0)
 let cellsLeft=Array.from(document.querySelectorAll(".gridCell")).filter(c=>parseInt(c.dataset.colIndex,10)===col)
 let spawnTop=null
@@ -663,8 +706,17 @@ spawnTop=maxBottom+spacingRow
 }
 spawnImage(col,spawnTop)
 }
-img.src=mediaSrc(file)
+void fillMediaSrc(img, file).then(ok=>{
+if(!ok){
+let col=parseInt(cell.dataset.colIndex,10)
+reservedImages.delete(file)
+cell.remove()
+addDebugLog("nicht im Cache col "+col+": "+file)
+spawnImage(col,spawnTop)
+return
+}
 if(img.complete && img.naturalWidth>0) startShown()
+})
 }
 
 async function updateCacheSw(){
