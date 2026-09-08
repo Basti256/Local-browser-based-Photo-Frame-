@@ -4,6 +4,36 @@ Alle wesentlichen Änderungen am Local-browser-based-Photo-Frame werden in diese
 
 ---
 
+## [2.20.11] – 2026-09-08
+
+### Behoben
+
+- Wall erkennt einen Verbindungsabbruch auch ohne WebSocket-`onclose` (HTTP-Watchdog) und zeigt den roten Punkt.
+- Offline spielt die Wall Bilder und Videos aus dem Browser-Cache weiter, statt die Slideshow leer laufen zu lassen.
+
+### Geändert
+
+- Debug-Overlay: Verbindung, Anzahl gecachter Bilder/Videos und belegter Cache-Speicher.
+- Admin Media-Cache: Erklärung, was die Cache-TTL bedeutet und wann man sie anpasst.
+
+---
+
+## [2.20.10] – 2026-09-08
+
+### Hinzugefügt
+
+- Upload-Seite: Restzeit und Uploadgeschwindigkeit neben der Prozentanzeige, jeweils unter `/admin` Reiter Upload ein- und ausschaltbar (Standard aus).
+
+---
+
+## [2.20.9] – 2026-09-08
+
+### Behoben
+
+- Medienbrowser: Massenlöschen (tausende Dateien) bricht nicht mehr mit „Aktion fehlgeschlagen“ ab, während der Server noch weitermacht. Die Anfrage geht in Paketen, die Wall wird einmal pro Paket synchronisiert, der Fortschritt erscheint in der Leiste.
+
+---
+
 ## [2.20.8] – 2026-09-07
 
 ### Geändert

@@ -890,7 +890,7 @@ Media-Cache
 <div class="sectionContent">
 
 <div id="help_cache" class="sectionInfo">
-Lädt Bilder und Videos beim ersten Abruf in den Browser-Cache. Bei Verbindungsabbruch werden sie aus dem Cache geladen (Fallback). TTL = wie lange Einträge gültig bleiben.
+Lädt Bilder und Videos beim ersten Anzeigen in den Browser-Cache der Wall. Fällt die Verbindung zum Server aus, spielt die Wall die bereits gespeicherten Dateien weiter. Neue Uploads und die Highlight-Queue warten, bis die Verbindung wieder da ist.
 </div>
 
 <div class="row">
@@ -900,6 +900,7 @@ Lädt Bilder und Videos beim ersten Abruf in den Browser-Cache. Bei Verbindungsa
 
 <label>Cache TTL (Minuten)</label>
 <input id="cache_ttl_minutes" placeholder="30" type="number">
+<div class="sectionInfo">Nach dieser Zeit ohne erfolgreichen Server-Abruf gilt die Datei als veraltet. Ist der Cache voll, werden veraltete Dateien zuerst entfernt. Ohne Verbindung bleiben auch veraltete Dateien sichtbar. Kürzer einstellen, wenn der Cache schneller Platz für neuere Fotos machen soll. Länger, wenn die Wall bei längeren Ausfällen möglichst viele Dateien behalten soll.</div>
 
 <label>Max. Bilder im Cache</label>
 <input id="cache_max_images" placeholder="100" type="number">
@@ -1032,6 +1033,18 @@ Einstellungen für die Upload-Seite, auf die Gäste über den QR-Code zugreifen.
 <label>Max. Zeichen pro Kommentar</label>
 <input id="comment_max_length" placeholder="80" type="number" min="1" max="500">
 <p class="bgHint">Begrenzt das Kommentarfeld auf der Upload-Seite. Nach dem Speichern gilt der Wert dort sofort, auch ohne die Seite neu zu laden.</p>
+
+<div class="row">
+<label>Restzeit beim Upload anzeigen</label>
+<input type="checkbox" id="upload_show_eta" class="checkbox">
+</div>
+<p class="bgHint">Neben der Prozentanzeige, z. B. (40%) (4min 30s verbleibend). Standard aus.</p>
+
+<div class="row">
+<label>Uploadgeschwindigkeit anzeigen</label>
+<input type="checkbox" id="upload_show_speed" class="checkbox">
+</div>
+<p class="bgHint">Neben der Prozentanzeige, z. B. (40%) (U: 256 kbit/s). Ab 1 Mbit/s in Mbit/s. Standard aus.</p>
 
 </div>
 </div>
@@ -1340,6 +1353,10 @@ upload_image.value=config.upload_image || ""
 upload_allow_videos.checked=config.upload_allow_videos !== false
 upload_max_files.value=config.upload_max_files || 20
 upload_max_file_size_mb.value=config.upload_max_file_size_mb || 50
+let uploadEtaEl=document.getElementById("upload_show_eta")
+if(uploadEtaEl) uploadEtaEl.checked=!!config.upload_show_eta
+let uploadSpeedEl=document.getElementById("upload_show_speed")
+if(uploadSpeedEl) uploadSpeedEl.checked=!!config.upload_show_speed
 
 debug_overlay.checked=config.debug_overlay || false
 debug_random_comments.value=config.debug_random_comments ? "1" : "0"
@@ -1502,6 +1519,10 @@ config.upload_image_rotation=window.headerRotationFromForm?headerRotationFromFor
 config.upload_allow_videos=upload_allow_videos.checked
 config.upload_max_files=toInt(upload_max_files.value, config.upload_max_files || 20)
 config.upload_max_file_size_mb=toInt(upload_max_file_size_mb.value, config.upload_max_file_size_mb || 50)
+let uploadEtaSave=document.getElementById("upload_show_eta")
+config.upload_show_eta=uploadEtaSave?uploadEtaSave.checked:false
+let uploadSpeedSave=document.getElementById("upload_show_speed")
+config.upload_show_speed=uploadSpeedSave?uploadSpeedSave.checked:false
 
 config.debug_overlay=debug_overlay.checked
 config.debug_random_comments=debug_random_comments.value==="1"

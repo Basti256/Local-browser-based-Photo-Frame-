@@ -427,18 +427,99 @@ let jitter=(Math.random()-0.5)*laneSpan*0.2
 return Math.max(0, Math.min(maxX, chosen+jitter))
 }
 
+const imageTypes=["jpg","jpeg","png","webp","gif"]
+const videoTypes=["mp4","mov","webm"]
+
 let serverStateChannel=null
 let serverOnline=true
 let cachedImages=new Set()
+let cacheInventory={images:0,videos:0,bytes:0}
+let cacheInventoryBusy=false
 let wakeLockSentinel=null
 let wakeLockActive=false
 let altWakeLockVideo=null
 let altWakeLockCanvas=null
 let altWakeLockActive=false
 let altWakeLockTick=null
-let lastConnectionBroadcast=0
-const CONNECTION_BROADCAST_DEBOUNCE_MS=500
+let lastBroadcastState=null
 let connectionFadeTimer=null
+
+function fmtCacheBytes(n){
+n=Number(n)||0
+if(n<1024) return n+" B"
+if(n<1048576) return (n/1024).toFixed(1)+" KB"
+if(n<1073741824) return (n/1048576).toFixed(1)+" MB"
+return (n/1073741824).toFixed(2)+" GB"
+}
+function cacheNameFromUrl(url){
+return (String(url||"").split("/").pop()||"").split("?")[0]
+}
+function isCachedVideo(fn){
+let ext=(String(fn||"").split(".").pop()||"").toLowerCase()
+return videoTypes.includes(ext)
+}
+function cachedFilenames(kind){
+let list=[]
+cachedImages.forEach(fn=>{
+if(!fn||String(fn).endsWith(".txt")) return
+let vid=isCachedVideo(fn)
+if(kind==="video"?vid:!vid) list.push(fn)
+})
+return list
+}
+function ingestCachedFilename(fn){
+fn=(fn||"").split("?")[0]
+if(!fn||fn.endsWith(".txt")) return
+cachedImages.add(fn)
+if(serverOnline) return
+let ext=(fn.split(".").pop()||"").toLowerCase()
+if(videoTypes.includes(ext)){
+if(!videos.includes(fn)) videos.push(fn)
+}else if(imageTypes.includes(ext)){
+if(!images.includes(fn)) images.push(fn)
+}
+}
+async function refreshCacheInventory(){
+if(!("caches" in window) || cacheInventoryBusy) return
+cacheInventoryBusy=true
+try{
+let cache=await caches.open("wall-media-v1")
+let metaCache=await caches.open("wall-media-meta-v1")
+let keys=await cache.keys()
+let next=new Set()
+let bytes=0, img=0, vid=0
+for(let req of keys){
+let fn=cacheNameFromUrl(req.url)
+if(!fn||fn.endsWith(".txt")) continue
+next.add(fn)
+if(isCachedVideo(fn)) vid++; else img++
+let sz=0
+let m=await metaCache.match(req.url)
+if(m){
+try{ let j=await m.json(); sz=Number(j.s)||0 }catch(e){}
+}
+if(!sz){
+try{
+let res=await cache.match(req)
+if(res){ let b=await res.blob(); sz=b.size||0 }
+}catch(e){}
+}
+bytes+=sz
+}
+cachedImages=next
+if(!serverOnline) next.forEach(ingestCachedFilename)
+cacheInventory={images:img,videos:vid,bytes:bytes}
+}catch(e){}
+cacheInventoryBusy=false
+}
+
+function notifyServerState(state){
+if(!config||!config.cache_enabled) return
+if(!serverStateChannel) serverStateChannel=new BroadcastChannel("wall-server-state")
+if(lastBroadcastState===state) return
+lastBroadcastState=state
+serverStateChannel.postMessage({state:state})
+}
 
 function setConnection(state){
 
@@ -446,14 +527,17 @@ let icon=document.getElementById("connectionStatus")
 
 if(!icon) return
 
-serverOnline=state==="online"
+let nowOnline=state==="online"
+let changed=serverOnline!==nowOnline
+serverOnline=nowOnline
 
+if(changed){
 if(connectionFadeTimer){
 clearTimeout(connectionFadeTimer)
 connectionFadeTimer=null
 }
 
-if(state==="online"){
+if(nowOnline){
 
 icon.style.transition="opacity 1s"
 icon.style.background="lime"
@@ -473,21 +557,34 @@ icon.style.background="red"
 icon.style.opacity=1
 void icon.offsetWidth
 icon.style.transition="opacity 1s"
+refreshCacheInventory()
+
+}
+}
+
+notifyServerState(state)
 
 }
 
-if(config&&config.cache_enabled){
-if(!serverStateChannel) serverStateChannel=new BroadcastChannel("wall-server-state")
-const now=Date.now()
-if(now-lastConnectionBroadcast<CONNECTION_BROADCAST_DEBOUNCE_MS) return
-lastConnectionBroadcast=now
-serverStateChannel.postMessage({state:state})
+async function connectionWatchdog(){
+let httpOk=false
+try{
+let ctrl=new AbortController()
+let t=setTimeout(()=>ctrl.abort(),2500)
+let res=await fetch("/api/version",{cache:"no-store",signal:ctrl.signal})
+clearTimeout(t)
+httpOk=!!res.ok
+}catch(e){ httpOk=false }
+let wsOk=ws && ws.readyState===WebSocket.OPEN
+if(!httpOk){
+if(serverOnline && wsOk){
+try{ ws.close() }catch(e){}
 }
-
+setConnection("offline")
+}else if(wsOk){
+setConnection("online")
 }
-
-const imageTypes=["jpg","jpeg","png","webp","gif"]
-const videoTypes=["mp4","mov","webm"]
+}
 
 let ws=null
 let reconnectTimeout=null
@@ -529,6 +626,9 @@ try{ ws.send(JSON.stringify({type:"stats",images:currentImages,videos:currentVid
 }
 }
 setInterval(sendStats,5000)
+window.addEventListener("offline",()=>setConnection("offline"))
+setInterval(connectionWatchdog,4000)
+setInterval(()=>{ if(config&&config.cache_enabled) refreshCacheInventory() },10000)
 
 function markFromCache(file){
 if(!config.debug_overlay) return
@@ -547,21 +647,22 @@ const CACHE_LOG_DEBOUNCE_MS=1000
 if("serviceWorker"in navigator){
 navigator.serviceWorker.addEventListener("message",e=>{
 if(e.data&&e.data.type==="cache_serve"){
+ingestCachedFilename(e.data.file)
+markFromCache(e.data.file)
 const key="serve:"+e.data.file
 if(Date.now()-(lastCacheLog[key]||0)<CACHE_LOG_DEBOUNCE_MS) return
 lastCacheLog[key]=Date.now()
 addDebugLog("Cache geladen: "+e.data.file+(e.data.expired?" (abgelaufen)":""))
-cachedImages.add((e.data.file||"").split("?")[0])
-markFromCache(e.data.file)
 }else if(e.data&&e.data.type==="cache_store"){
+ingestCachedFilename(e.data.file)
 const key="store:"+e.data.file
 if(Date.now()-(lastCacheLog[key]||0)<CACHE_LOG_DEBOUNCE_MS) return
 lastCacheLog[key]=Date.now()
 addDebugLog("Cache gespeichert: "+e.data.file)
-cachedImages.add((e.data.file||"").split("?")[0])
 }else if(e.data&&e.data.type==="cache_list"){
 const list=e.data.files||[]
-list.forEach(f=>cachedImages.add((f||"").split("?")[0]))
+list.forEach(f=>ingestCachedFilename(f))
+refreshCacheInventory()
 if(config.debug_overlay&&list.length>0){
 const key="cache_list"
 if(Date.now()-(lastCacheLog[key]||0)<CACHE_LOG_DEBOUNCE_MS) return
@@ -575,12 +676,17 @@ ws.onmessage=async(event)=>{
 
 let msg=event.data
 
+if(msg==="__ping__") return
 if(msg==="__config_reload__"){
 location.reload()
 return
 }
 if(msg==="__config_updated__"){
 await loadConfig()
+return
+}
+if(msg==="__media_sync__"){
+await catchUpMedia()
 return
 }
 if(typeof msg==="string" && msg.indexOf("__hide__:")===0){
@@ -830,7 +936,9 @@ box.innerHTML =
 "VideoHighlights: "+currentVideoHighlights+" (Queue: "+videoHighlightQueue.length+")<br>"+
 "CenterHighlights: "+currentCenterHighlights+"<br>"+
 "Spawn: "+spawnLabel+"<br>"+
+"Verbindung: "+(serverOnline?"online":"offline")+"<br>"+
 "Cache: "+cacheOn+(config.cache_enabled?" (TTL "+cacheTtl+"min)":"")+"<br>"+
+"Cache Inhalt: "+cacheInventory.images+" Bilder, "+cacheInventory.videos+" Videos, "+fmtCacheBytes(cacheInventory.bytes)+"<br>"+
 "Bildschirm wach: "+wakeLockStatus
 
 if(debugLogs.length){
@@ -878,6 +986,9 @@ try{
 await navigator.serviceWorker.register("/sw.js?t="+Date.now(),{scope:"/"})
 addDebugLog("Cache SW registriert (TTL "+(config.cache_ttl_minutes||30)+"min)")
 console.log("[WALL] Cache SW registriert")
+lastBroadcastState=null
+notifyServerState(serverOnline?"online":"offline")
+await refreshCacheInventory()
 }catch(e){ addDebugLog("Cache SW Fehler: "+e.message); console.error("[WALL] Cache SW:",e) }
 }else if("serviceWorker"in navigator){
 try{
@@ -1287,13 +1398,12 @@ document.querySelectorAll(".photoFrame[data-file]").forEach(f=>{ let v=f.dataset
 return files
 }
 function chooseRandomImage(){
-if(images.length===0) return null
 let displayed=getDisplayedMedia()
 let pool=images
-if(config.cache_enabled&&!serverOnline&&cachedImages.size>0){
-pool=images.filter(f=>cachedImages.has(f.split("?")[0]))
+if(config.cache_enabled&&!serverOnline){
+pool=cachedFilenames("image")
 if(pool.length===0) return null
-}
+}else if(images.length===0) return null
 let available=pool.filter(f=>!displayed.has(f)&&!reservedImages.has(f))
 if(available.length===0) return null
 let chosen=available[Math.floor(Math.random()*available.length)]
@@ -1301,13 +1411,12 @@ reservedImages.add(chosen)
 return chosen
 }
 function chooseRandomVideo(){
-if(videos.length===0) return null
 let displayed=getDisplayedMedia()
 let pool=videos
-if(config.cache_enabled&&!serverOnline&&cachedImages.size>0){
-pool=videos.filter(f=>cachedImages.has(f.split("?")[0]))
+if(config.cache_enabled&&!serverOnline){
+pool=cachedFilenames("video")
 if(pool.length===0) return null
-}
+}else if(videos.length===0) return null
 let available=pool.filter(f=>!displayed.has(f)&&!reservedVideos.has(f))
 if(available.length===0) return null
 let chosen=available[Math.floor(Math.random()*available.length)]
@@ -1345,7 +1454,7 @@ spawnMedia(file,false)
 function spawnMedia(file,isHighlight=false){
 
 if(!file) return
-if(!images.includes(file) && !videos.includes(file)) return
+if(!images.includes(file) && !videos.includes(file) && !cachedImages.has((file||"").split("?")[0])) return
 
 let ext=file.split(".").pop().toLowerCase()
 
@@ -1834,6 +1943,7 @@ updateDebug()
 await loadImages()
 
 connectWebSocket()
+connectionWatchdog()
 
 setInterval(updateDebug,500)
 

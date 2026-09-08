@@ -99,6 +99,8 @@ DEFAULT_CONFIG = {
     "upload_allow_videos": True,
     "upload_max_files": 20,
     "upload_max_file_size_mb": 50,
+    "upload_show_eta": False,
+    "upload_show_speed": False,
     "frame_padding_top": 12,
     "frame_padding_side": 12,
     "frame_padding_bottom": 50,

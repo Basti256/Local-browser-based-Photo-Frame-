@@ -62,7 +62,13 @@ async function evictIfNeeded(cache, metaCache, newUrl, newIsVideo, newSize) {
   if (newIsVideo) vidCount++; else imgCount++;
   totalBytes += newSize;
   const toRemove = [];
-  entries.sort((a,b) => a.t - b.t);
+  const now = Date.now();
+  entries.sort((a,b) => {
+    const ae = (now - a.t >= CACHE_TTL_MS) ? 0 : 1;
+    const be = (now - b.t >= CACHE_TTL_MS) ? 0 : 1;
+    if (ae !== be) return ae - be;
+    return a.t - b.t;
+  });
   for (const e of entries) {
     if (totalBytes > CACHE_MAX_BYTES || (e.isVideo && vidCount > CACHE_MAX_VIDEOS) || (!e.isVideo && imgCount > CACHE_MAX_IMAGES)) {
       toRemove.push(e);

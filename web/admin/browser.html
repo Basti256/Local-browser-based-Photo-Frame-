@@ -25,6 +25,7 @@
 .viewer img,.viewer video{max-width:100%;max-height:80vh;}
 .viewer .bar{margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
 .viewer .bar button{margin-top:0;}
+.actions button:disabled{opacity:0.55;cursor:wait;}
 </style>
 </head>
 <body>
@@ -76,16 +77,19 @@ let items = [];
 let current = null;
 let selected = new Set();
 let lastIndex = null;
+let busy = false;
+const BATCH_CHUNK = 40;
 function selectedItems(){
   return items.filter(it => selected.has(it.name));
 }
 function syncSelInfo(){
   const n = selected.size;
   document.getElementById("selinfo").textContent = n ? (n + " ausgewählt") : "";
-  document.getElementById("selHide").disabled = n === 0;
-  document.getElementById("selShow").disabled = n === 0;
-  document.getElementById("selDel").disabled = n === 0;
-  document.getElementById("selNone").disabled = n === 0;
+  document.getElementById("selHide").disabled = busy || n === 0;
+  document.getElementById("selShow").disabled = busy || n === 0;
+  document.getElementById("selDel").disabled = busy || n === 0;
+  document.getElementById("selNone").disabled = busy || n === 0;
+  document.getElementById("selAll").disabled = busy;
 }
 function paintSelection(){
   document.querySelectorAll(".tile[data-name]").forEach(tile => {
@@ -184,23 +188,48 @@ function closeViewer(){
   current = null;
 }
 async function batch(action, names, confirmMsg){
-  if (!names.length) return;
+  if (!names.length || busy) return;
   if (confirmMsg && !confirm(confirmMsg)) return;
-  const res = await fetch("/api/admin/media/batch", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({action, names})
-  });
-  const d = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    showErr(typeof d.detail === "string" ? d.detail : "Aktion fehlgeschlagen");
-    return;
-  }
-  if (action === "delete") {
-    names.forEach(n => selected.delete(n));
-    if (current && names.includes(current.name)) closeViewer();
+  const verb = action === "delete" ? "Löschen" : (action === "hide" ? "Verstecken" : "Einblenden");
+  const total = names.length;
+  busy = true;
+  showErr("");
+  syncSelInfo();
+  let done = 0;
+  let failed = false;
+  try {
+    for (let i = 0; i < names.length; i += BATCH_CHUNK) {
+      const slice = names.slice(i, i + BATCH_CHUNK);
+      document.getElementById("selinfo").textContent = verb + " " + Math.min(i + slice.length, total) + " / " + total + " …";
+      let res;
+      try {
+        res = await fetch("/api/admin/media/batch", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({action, names: slice})
+        });
+      } catch (e) {
+        showErr("Zeitüberschreitung oder Verbindungsfehler. Die Liste wird neu geladen — ein Teil kann bereits erledigt sein.");
+        failed = true;
+        break;
+      }
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showErr(typeof d.detail === "string" ? d.detail : ("Aktion fehlgeschlagen nach " + done + " von " + total));
+        failed = true;
+        break;
+      }
+      done += slice.length;
+      if (action === "delete") {
+        slice.forEach(n => selected.delete(n));
+        if (current && slice.includes(current.name)) closeViewer();
+      }
+    }
+  } finally {
+    busy = false;
   }
   await load();
+  if (!failed) showErr("");
 }
 document.getElementById("closev").onclick = closeViewer;
 document.getElementById("hidev").onclick = async () => {

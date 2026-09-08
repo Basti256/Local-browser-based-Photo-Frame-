@@ -26,7 +26,7 @@ from server.pin import (
     wait_seconds_remaining,
 )
 from server.project import IMAGE_EXT, VIDEO_EXT, get_paths, require_paths, safe_join
-from server.routes.wall import broadcast, broadcast_config, broadcast_hide, clients
+from server.routes.wall import broadcast, broadcast_config, broadcast_hide, broadcast_media_sync, clients
 from server.transcode import display_name_for
 
 router = APIRouter()
@@ -318,17 +318,11 @@ async def admin_media_batch(body: BatchBody, _project: str = Depends(require_adm
                     missing += 1
                     continue
                 raise
-        for display in displays:
-            await broadcast_hide(display)
+        await broadcast_media_sync()
         return {"ok": True, "action": "delete", "count": len(displays), "missing": missing}
     hidden = action == "hide"
     done = set_hidden_many(paths, names, hidden)
-    for name in done:
-        display = display_name_for(name, paths.derived)
-        if hidden:
-            await broadcast_hide(display)
-        else:
-            await broadcast(display)
+    await broadcast_media_sync()
     return {"ok": True, "action": action, "count": len(done), "hidden": hidden}
 
 

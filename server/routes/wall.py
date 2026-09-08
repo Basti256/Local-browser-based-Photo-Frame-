@@ -1,6 +1,7 @@
 """Wall: WebSocket, öffentliche Config- und Medienliste."""
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from collections import defaultdict
@@ -43,11 +44,16 @@ async def broadcast(filename: str, project: str | None = None) -> None:
 
 
 HIDE_PREFIX = "__hide__:"
+MEDIA_SYNC = "__media_sync__"
 
 
 async def broadcast_hide(display_name: str, project: str | None = None) -> None:
     if display_name:
         await broadcast(HIDE_PREFIX + display_name, project=project)
+
+
+async def broadcast_media_sync(project: str | None = None) -> None:
+    await broadcast(MEDIA_SYNC, project=project)
 
 
 async def broadcast_config(reload_full: bool = False, project: str | None = None) -> None:
@@ -77,7 +83,11 @@ async def websocket_endpoint(websocket: WebSocket):
     clients[name].append(websocket)
     try:
         while True:
-            msg = await websocket.receive_text()
+            try:
+                msg = await asyncio.wait_for(websocket.receive_text(), timeout=12)
+            except asyncio.TimeoutError:
+                await websocket.send_text("__ping__")
+                continue
             try:
                 data = json.loads(msg)
                 if data.get("type") == "stats":
@@ -88,9 +98,10 @@ async def websocket_endpoint(websocket: WebSocket):
             except (json.JSONDecodeError, TypeError):
                 pass
     except Exception:
+        pass
+    finally:
         if websocket in clients[name]:
             clients[name].remove(websocket)
-    finally:
         from server.context import reset_url_prefix
         reset_url_prefix(prefix_token)
         reset_current_project(token)
