@@ -227,7 +227,7 @@ button{background:#4CAF50;color:white;border:none;padding:15px;font-size:18px;bo
 <div class="section">
 <div class="sectionHeader" onclick="toggleSection(this)">Debug <span>▼</span></div>
 <div class="sectionContent">
-<div class="sectionInfo">Zeigt ein technisches Overlay mit Status-Informationen zur Wand.</div>
+<div class="sectionInfo">Zeigt ein technisches Overlay mit Status-Informationen zur Wand. Die Wall lässt sich hier neu laden, ohne am Gerät selbst zu tippen.</div>
 <div class="row"><label>Debug Overlay anzeigen</label><input type="checkbox" id="debug_overlay" class="checkbox"></div>
 <label>Zufällige Bildtexte beim Upload</label>
 <select id="debug_random_comments">
@@ -235,6 +235,8 @@ button{background:#4CAF50;color:white;border:none;padding:15px;font-size:18px;bo
 <option value="1">An</option>
 </select>
 <div class="helpText">Nur zum Testen. Leere Kommentare werden beim Hochladen mit Quatsch, Smileys und Symbolen gefüllt, bis zum Zeichenlimit.</div>
+<button type="button" id="wall_reload_btn" onclick="reloadWall()" style="margin-top:12px;margin-bottom:6px;">Wall neu laden</button>
+<div id="wall_reload_result" class="helpText"></div>
 </div>
 </div>
 
@@ -607,6 +609,32 @@ alert("Einstellungen gespeichert. Ansicht geändert – Admin und Wall werden ne
 location.reload()
 }else{
 alert("Einstellungen gespeichert.")
+}
+}
+
+async function reloadWall(){
+let btn=document.getElementById("wall_reload_btn")
+let box=document.getElementById("wall_reload_result")
+if(btn) btn.disabled=true
+if(box) box.textContent="…"
+try{
+let res=await fetch("/api/admin/wall-reload",{method:"POST"})
+let data={}
+try{ data=await res.json() }catch(e){}
+if(!res.ok){
+if(box) box.textContent=res.status===401?"PIN-Sitzung fehlt.":"Neu laden fehlgeschlagen."
+return
+}
+let n=data.walls||0
+if(box){
+box.textContent=n
+?(n===1?"Wand neu geladen (1 Verbindung).":"Wand neu geladen ("+n+" Verbindungen).")
+:"Keine offene Wand-Verbindung. Die Wall muss geöffnet und online sein."
+}
+}catch(e){
+if(box) box.textContent="Neu laden fehlgeschlagen."
+}finally{
+if(btn) btn.disabled=false
 }
 }
 

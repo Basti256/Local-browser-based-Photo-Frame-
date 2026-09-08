@@ -856,7 +856,7 @@ Debug
 <div class="sectionContent">
 
 <div id="help_debug" class="sectionInfo">
-Zeigt ein technisches Overlay mit Status-Informationen zur Wand und die Spawn-Bahnen als Linien (nur für Fehlersuche). Zufällige Bildtexte helfen beim Testen der Beschriftung unter den Fotos.
+Zeigt ein technisches Overlay mit Status-Informationen zur Wand und die Spawn-Bahnen als Linien (nur für Fehlersuche). Zufällige Bildtexte helfen beim Testen der Beschriftung unter den Fotos. Die Wall lässt sich hier neu laden, ohne am Gerät selbst zu tippen.
 </div>
 
 <div class="row">
@@ -870,6 +870,11 @@ Zeigt ein technisches Overlay mit Status-Informationen zur Wand und die Spawn-Ba
 <option value="1">An</option>
 </select>
 <p class="bgHint">Nur zum Testen. Leere Kommentare werden beim Hochladen mit Quatsch, Smileys und Symbolen gefüllt, bis zum Zeichenlimit.</p>
+
+<button type="button" id="wall_reload_btn" onclick="reloadWall()" style="margin-top:12px;margin-bottom:6px;">
+Wall neu laden
+</button>
+<div id="wall_reload_result" class="bgHint"></div>
 
 </div>
 </div>
@@ -1524,6 +1529,32 @@ alert("Einstellungen gespeichert. Ansicht geändert – Admin und Wall werden ne
 location.reload()
 }else{
 alert("Einstellungen gespeichert.")
+}
+}
+
+async function reloadWall(){
+let btn=document.getElementById("wall_reload_btn")
+let box=document.getElementById("wall_reload_result")
+if(btn) btn.disabled=true
+if(box) box.textContent="…"
+try{
+let res=await fetch("/api/admin/wall-reload",{method:"POST"})
+let data={}
+try{ data=await res.json() }catch(e){}
+if(!res.ok){
+if(box) box.textContent=res.status===401?"PIN-Sitzung fehlt.":"Neu laden fehlgeschlagen."
+return
+}
+let n=data.walls||0
+if(box){
+box.textContent=n
+?(n===1?"Wand neu geladen (1 Verbindung).":"Wand neu geladen ("+n+" Verbindungen).")
+:"Keine offene Wand-Verbindung. Die Wall muss geöffnet und online sein."
+}
+}catch(e){
+if(box) box.textContent="Neu laden fehlgeschlagen."
+}finally{
+if(btn) btn.disabled=false
 }
 }
 

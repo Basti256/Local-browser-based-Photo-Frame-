@@ -243,6 +243,8 @@ let videoHighlightQueue=[]
 let highlightWorkerRunning=false
 
 let knownFiles=new Set()
+let mediaListLoaded=false
+let catchUpBusy=false
 
 let config={}
 
@@ -500,6 +502,7 @@ ws.onopen = () => {
 
 setConnection("online")
 sendStats()
+catchUpMedia()
 
 }
 
@@ -586,16 +589,7 @@ return
 }
 
 addMedia(msg)
-
-let ext=msg.split(".").pop().toLowerCase()
-let isVid=videoTypes.includes(ext)
-if(isVid && config.video_highlight_new){
-videoHighlightQueue.push(msg)
-processHighlightQueue()
-}else if(!isVid && config.image_highlight_new){
-imageHighlightQueue.push(msg)
-processHighlightQueue()
-}
+queueNewMedia(msg)
 
 }
 
@@ -617,6 +611,48 @@ videos.push(file)
 else
 images.push(file)
 
+}
+
+function queueNewMedia(file){
+if(!file || file.indexOf("__")===0) return
+let ext=file.split(".").pop().toLowerCase()
+let isVid=videoTypes.includes(ext)
+if(isVid && config.video_highlight_new){
+if(videoHighlightQueue.indexOf(file)<0) videoHighlightQueue.push(file)
+processHighlightQueue()
+}else if(!isVid && config.image_highlight_new){
+if(imageHighlightQueue.indexOf(file)<0) imageHighlightQueue.push(file)
+processHighlightQueue()
+}
+}
+
+async function catchUpMedia(){
+if(catchUpBusy) return
+catchUpBusy=true
+let asNew=mediaListLoaded
+try{
+let res=await fetch("/api/images")
+let files=await res.json()
+if(!Array.isArray(files)) files=[]
+let remote=new Set(files)
+for(let f of Array.from(knownFiles)){
+if(!remote.has(f)) hideMedia(f)
+}
+let added=0
+for(let f of files){
+if(knownFiles.has(f)) continue
+addMedia(f)
+if(asNew) queueNewMedia(f)
+added++
+}
+mediaListLoaded=true
+if(added && asNew) addDebugLog("Nach Sync: "+added+" neue Datei(en)")
+processHighlightQueue()
+}catch(e){
+addDebugLog("Nach Sync fehlgeschlagen")
+}finally{
+catchUpBusy=false
+}
 }
 
 function hideMedia(file){
@@ -822,10 +858,15 @@ console.log("[WALL DEBUG]",line)
 
 async function loadImages(){
 
+try{
 let res=await fetch("/api/images")
 let files=await res.json()
-
+if(!Array.isArray(files)) files=[]
 for(let f of files) addMedia(f)
+mediaListLoaded=true
+}catch(e){
+addDebugLog("Bilderlisten-Fehler")
+}
 
 }
 

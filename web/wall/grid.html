@@ -143,6 +143,8 @@ let altWakeLockCanvas=null
 let altWakeLockActive=false
 let altWakeLockTick=null
 let cachedImages=new Set()
+let mediaListLoaded=false
+let catchUpBusy=false
 let lastConnectionBroadcast=0
 const CONNECTION_BROADCAST_DEBOUNCE_MS=500
 let connectionFadeTimer=null
@@ -230,7 +232,7 @@ box.innerHTML+="<br>Log:<br>"+debugLogs.join("<br>")
 let reconnectTimeout=null
 function connectWebSocket(){
 ws=new WebSocket((location.protocol==="https:"?"wss://":"ws://")+location.host+"/ws")
-ws.onopen=()=>{ setConnection("online"); sendStats() }
+ws.onopen=()=>{ setConnection("online"); sendStats(); catchUpMedia() }
 ws.onclose=()=>{
 setConnection("offline")
 if(reconnectTimeout) clearTimeout(reconnectTimeout)
@@ -318,6 +320,34 @@ if(!file || file.indexOf("__")===0) return
 if(images.includes(file)) return
 let ext=file.split(".").pop().toLowerCase()
 if(imageTypes.includes(ext)) images.push(file)
+}
+
+async function catchUpMedia(){
+if(catchUpBusy) return
+catchUpBusy=true
+let asNew=mediaListLoaded
+try{
+let res=await fetch("/api/images")
+let files=await res.json()
+if(!Array.isArray(files)) files=[]
+let remote=new Set(files)
+for(let f of images.slice()){
+if(!remote.has(f)) hideMedia(f)
+}
+let added=0
+for(let f of files){
+if(images.includes(f)) continue
+addMedia(f)
+added++
+if(asNew) addDebugLog("catch-up image: "+f)
+}
+mediaListLoaded=true
+if(added && asNew) addDebugLog("Nach Sync: "+added+" neue Datei(en)")
+}catch(e){
+addDebugLog("Nach Sync fehlgeschlagen")
+}finally{
+catchUpBusy=false
+}
 }
 
 function hideMedia(file){
@@ -620,6 +650,7 @@ let files=await res.json()
 if(!Array.isArray(files)) files=[]
 
 for(let f of files) addMedia(f)
+mediaListLoaded=true
 
 setInterval(updateDebug,500)
 

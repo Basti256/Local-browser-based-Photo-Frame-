@@ -4,6 +4,22 @@ Alle wesentlichen Änderungen am Local-browser-based-Photo-Frame werden in diese
 
 ---
 
+## [2.20.8] – 2026-09-07
+
+### Geändert
+
+- Wall: nach Wiederverbinden werden verpasste Uploads nachgeholt und in die Highlight-Queue gelegt. Die Queue selbst läuft nach dem Abbruch weiter, sobald die Wall wieder online ist.
+
+---
+
+## [2.20.7] – 2026-09-07
+
+### Hinzugefügt
+
+- Admin System → Debug: Schaltfläche „Wall neu laden“ lädt alle verbundenen `/wall`-Tabs aus der Ferne neu.
+
+---
+
 ## [2.20.6] – 2026-09-07
 
 ### Behoben

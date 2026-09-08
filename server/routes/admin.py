@@ -26,7 +26,7 @@ from server.pin import (
     wait_seconds_remaining,
 )
 from server.project import IMAGE_EXT, VIDEO_EXT, get_paths, require_paths, safe_join
-from server.routes.wall import broadcast, broadcast_hide, clients
+from server.routes.wall import broadcast, broadcast_config, broadcast_hide, clients
 from server.transcode import display_name_for
 
 router = APIRouter()
@@ -107,6 +107,13 @@ def admin_stats(_project: str = Depends(require_admin_pin)):
         "base_url": net.get("base_url", ""),
         "public_https": net.get("public_https", False),
     }
+
+
+@router.post("/api/admin/wall-reload")
+async def wall_reload(_project: str = Depends(require_admin_pin)):
+    n = len(clients.get(_project) or [])
+    await broadcast_config(reload_full=True, project=_project)
+    return {"ok": True, "walls": n}
 
 
 @router.get("/api/network_test")
