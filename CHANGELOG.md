@@ -4,6 +4,19 @@ Alle wesentlichen Änderungen am Local-browser-based-Photo-Frame werden in diese
 
 ---
 
+## [2.20.12] – 2026-09-08
+
+### Behoben
+
+- Wall: Bilder aus dem Browser-Cache werden auch angezeigt, wenn sie sofort laden. Zuvor saß `onload` hinter `src`, deshalb blieb die Slideshow bei Cache-Treffern leer (`Images: 0`).
+- Cache-Fallback findet Dateien auch bei abweichender URL (gleicher Dateiname) und liest sie bei Ladefehler direkt aus dem Cache.
+
+### Geändert
+
+- Debug-Overlay: Verbindung als verbunden/getrennt, Cache-Zähler mit Hinweis dass nur bereits angezeigte Dateien im Gerät liegen.
+
+---
+
 ## [2.20.11] – 2026-09-08
 
 ### Behoben

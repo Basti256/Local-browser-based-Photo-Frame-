@@ -115,13 +115,31 @@ function notifyCacheStore(file, clientId) {
 
 const fetchInFlight = new Map();
 
+async function matchCached(cache, request) {
+  let hit = await cache.match(request.url);
+  if (hit) return hit;
+  hit = await cache.match(request);
+  if (hit) return hit;
+  const fn = (request.url.split('/').pop() || '').split('?')[0];
+  if (!fn) return undefined;
+  const keys = await cache.keys();
+  for (const k of keys) {
+    const kfn = (k.url.split('/').pop() || '').split('?')[0];
+    if (kfn === fn) {
+      hit = await cache.match(k);
+      if (hit) return hit;
+    }
+  }
+  return undefined;
+}
+
 async function handleMediaFetch(request, clientId) {
   const cache = await caches.open(CACHE_NAME);
   const metaCache = await caches.open(META_NAME);
   const fn = (request.url.split('/').pop() || '?').split('?')[0];
 
   if (!serverOnline) {
-    const cached = await cache.match(request.url);
+    const cached = await matchCached(cache, request);
     if (cached) {
       const metaRes = await metaCache.match(request.url);
       let expired = false;
@@ -140,7 +158,7 @@ async function handleMediaFetch(request, clientId) {
   if (inFlight) {
     const res = await inFlight;
     if (res) return res.clone();
-    const fallback = await cache.match(request.url);
+    const fallback = await matchCached(cache, request);
     return fallback || new Response('', {status: 503, statusText: 'Service Unavailable'});
   }
 
@@ -161,10 +179,15 @@ async function handleMediaFetch(request, clientId) {
         if (!alreadyCached) notifyCacheStore(fn, clientId);
         return netRes;
       }
+      const cachedFail = await matchCached(cache, request);
+      if (cachedFail) {
+        notifyCacheServe(fn, false, clientId);
+        return cachedFail;
+      }
       return netRes;
     } catch (err) {
       clearTimeout(timeout);
-      const cached = await cache.match(request.url);
+      const cached = await matchCached(cache, request);
       if (cached) {
         const metaRes = await metaCache.match(request.url);
         let expired = false;

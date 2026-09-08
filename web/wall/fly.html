@@ -479,6 +479,50 @@ if(!videos.includes(fn)) videos.push(fn)
 if(!images.includes(fn)) images.push(fn)
 }
 }
+function mediaSrc(file){
+return typeof pfUrl==="function"?pfUrl("/media/"+file):("/media/"+file)
+}
+async function cacheResponseForFile(file){
+let fn=(file||"").split("?")[0]
+if(!fn||!("caches" in window)) return null
+try{
+let cache=await caches.open("wall-media-v1")
+let keys=await cache.keys()
+for(let req of keys){
+if(cacheNameFromUrl(req.url)!==fn) continue
+let res=await cache.match(req)
+if(res) return res
+}
+}catch(e){}
+return null
+}
+function bindCacheFallback(element, file){
+let used=false
+element.addEventListener("error", async ()=>{
+if(used){
+reservedImages.delete(file)
+reservedVideos.delete(file)
+addDebugLog("nicht ladbar: "+file)
+return
+}
+used=true
+let res=await cacheResponseForFile(file)
+if(!res){
+reservedImages.delete(file)
+reservedVideos.delete(file)
+addDebugLog("nicht im Cache: "+file)
+return
+}
+try{
+let blob=await res.blob()
+element.src=URL.createObjectURL(blob)
+addDebugLog("Cache Fallback: "+file)
+}catch(e){
+reservedImages.delete(file)
+reservedVideos.delete(file)
+}
+})
+}
 async function refreshCacheInventory(){
 if(!("caches" in window) || cacheInventoryBusy) return
 cacheInventoryBusy=true
@@ -490,7 +534,7 @@ let next=new Set()
 let bytes=0, img=0, vid=0
 for(let req of keys){
 let fn=cacheNameFromUrl(req.url)
-if(!fn||fn.endsWith(".txt")) continue
+if(!fn||fn.endsWith(".txt")||next.has(fn)) continue
 next.add(fn)
 if(isCachedVideo(fn)) vid++; else img++
 let sz=0
@@ -516,7 +560,7 @@ cacheInventoryBusy=false
 function notifyServerState(state){
 if(!config||!config.cache_enabled) return
 if(!serverStateChannel) serverStateChannel=new BroadcastChannel("wall-server-state")
-if(lastBroadcastState===state) return
+if(state!=="offline" && lastBroadcastState===state) return
 lastBroadcastState=state
 serverStateChannel.postMessage({state:state})
 }
@@ -563,6 +607,7 @@ refreshCacheInventory()
 }
 
 notifyServerState(state)
+if(typeof updateDebug==="function") updateDebug()
 
 }
 
@@ -571,7 +616,7 @@ let httpOk=false
 try{
 let ctrl=new AbortController()
 let t=setTimeout(()=>ctrl.abort(),2500)
-let res=await fetch("/api/version",{cache:"no-store",signal:ctrl.signal})
+let res=await fetch("/api/version?pf="+Date.now(),{cache:"no-store",signal:ctrl.signal})
 clearTimeout(t)
 httpOk=!!res.ok
 }catch(e){ httpOk=false }
@@ -936,9 +981,9 @@ box.innerHTML =
 "VideoHighlights: "+currentVideoHighlights+" (Queue: "+videoHighlightQueue.length+")<br>"+
 "CenterHighlights: "+currentCenterHighlights+"<br>"+
 "Spawn: "+spawnLabel+"<br>"+
-"Verbindung: "+(serverOnline?"online":"offline")+"<br>"+
-"Cache: "+cacheOn+(config.cache_enabled?" (TTL "+cacheTtl+"min)":"")+"<br>"+
-"Cache Inhalt: "+cacheInventory.images+" Bilder, "+cacheInventory.videos+" Videos, "+fmtCacheBytes(cacheInventory.bytes)+"<br>"+
+"Verbindung: "+(serverOnline?"verbunden":"getrennt")+"<br>"+
+"Cache: "+cacheOn+(config.cache_enabled?" (TTL "+cacheTtl+"min, max "+(config.cache_max_images||100)+" Bilder)":"")+"<br>"+
+"Browser-Cache: "+cacheInventory.images+" Bilder, "+cacheInventory.videos+" Videos, "+fmtCacheBytes(cacheInventory.bytes)+" (nur schon angezeigte Dateien)<br>"+
 "Bildschirm wach: "+wakeLockStatus
 
 if(debugLogs.length){
@@ -1652,6 +1697,7 @@ element=document.createElement("video")
 element.autoplay=true
 element.muted=true
 element.playsInline=true
+bindCacheFallback(element, file)
 
 
 let videoCanPlayHandled=false
@@ -1798,7 +1844,6 @@ reverseStep()
 
 element=document.createElement("img")
 element.loading="eager"
-element.src=(typeof pfUrl==="function"?pfUrl("/media/"+file):("/media/"+file))
 
 }
 
@@ -1834,7 +1879,11 @@ frame.style.top=wallInnerHeight()+"px"
 }
 
 
+let imageShown=false
 element.onload = () => {
+if(isVideo) return
+if(imageShown) return
+imageShown=true
 
 frame.appendChild(element)
 let dbgI=document.createElement("div")
@@ -1930,6 +1979,14 @@ startExitWatcher()
 }
 
 
+}
+
+if(!isVideo){
+bindCacheFallback(element, file)
+element.src=mediaSrc(file)
+if(element.complete && element.naturalWidth>0){
+try{ element.onload() }catch(e){}
+}
 }
 
 }

@@ -3,7 +3,7 @@
 Handbuch der Software. Funktionen, Schnittstellen, Ports, Betrieb.
 Keine personenbezogenen Daten. Keine Zugangsdaten.
 
-Version des beschriebenen Stands: 2.20.11
+Version des beschriebenen Stands: 2.20.12
 
 ---
 
@@ -324,7 +324,7 @@ Anschließend Derivat in `derived/`:
 
 `GET /media/{datei}` liefert zuerst `derived/`, sonst `media/`. Originale werden nicht gelöscht. Fehlt `media/<stem>.txt` (Bildtext), antwortet der Server mit 204, nicht 404; das erscheint nicht im WARNING-Protokoll.
 
-WebSocket sendet den Anzeigenamen nach dem Transcoding. Die Wall prüft die Serververbindung zusätzlich per `GET /api/version` alle 4 s (Abbruch nach 2,5 s), weil ein halb offenes `/ws` oft kein `onclose` auslöst. Ohne HTTP-Antwort gilt die Wall als offline (roter Punkt). Der Server sendet `__ping__`, wenn 12 s keine Client-Nachricht kommt. Nach einem Verbindungsabbruch holt die Wall beim nächsten `/ws`-Open die Medienliste per `GET /api/images` nach: neue Dateien kommen in die Highlight-Queue (Fly) bzw. in den Pool (Grid), fehlende werden wie `__hide__:` entfernt. Die Highlight-Queue im Tab bleibt während der Trennung stehen und läuft weiter, sobald `serverOnline` wieder gilt. Die Slideshow spielt offline aus dem Browser-Cache (`wall-media-v1`), sofern der Media-Cache aktiv ist.
+WebSocket sendet den Anzeigenamen nach dem Transcoding. Die Wall prüft die Serververbindung zusätzlich per `GET /api/version` alle 4 s (Abbruch nach 2,5 s), weil ein halb offenes `/ws` oft kein `onclose` auslöst. Ohne HTTP-Antwort gilt die Wall als offline (roter Punkt). Der Server sendet `__ping__`, wenn 12 s keine Client-Nachricht kommt. Nach einem Verbindungsabbruch holt die Wall beim nächsten `/ws`-Open die Medienliste per `GET /api/images` nach: neue Dateien kommen in die Highlight-Queue (Fly) bzw. in den Pool (Grid), fehlende werden wie `__hide__:` entfernt. Die Highlight-Queue im Tab bleibt während der Trennung stehen und läuft weiter, sobald `serverOnline` wieder gilt. Die Slideshow spielt offline aus dem Browser-Cache (`wall-media-v1`), sofern der Media-Cache aktiv ist. Der Cache füllt sich nur durch tatsächlich angezeigte `/media/`-Dateien (kein Vorabladen), bis `cache_max_images` / `cache_max_videos` / `cache_max_size_mb`. Bei Cache-Treffer setzt die Wall `onload` vor `src`. Fehlt die genaue URL, wird nach Dateiname gesucht.
 
 ---
 

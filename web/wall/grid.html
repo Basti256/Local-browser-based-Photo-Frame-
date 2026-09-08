@@ -182,6 +182,23 @@ if(serverOnline) return
 let ext=(fn.split(".").pop()||"").toLowerCase()
 if(imageTypes.includes(ext) && !images.includes(fn)) images.push(fn)
 }
+function mediaSrc(file){
+return typeof pfUrl==="function"?pfUrl("/media/"+file):("/media/"+file)
+}
+async function cacheResponseForFile(file){
+let fn=(file||"").split("?")[0]
+if(!fn||!("caches" in window)) return null
+try{
+let cache=await caches.open("wall-media-v1")
+let keys=await cache.keys()
+for(let req of keys){
+if(cacheNameFromUrl(req.url)!==fn) continue
+let res=await cache.match(req)
+if(res) return res
+}
+}catch(e){}
+return null
+}
 async function refreshCacheInventory(){
 if(!("caches" in window) || cacheInventoryBusy) return
 cacheInventoryBusy=true
@@ -193,7 +210,7 @@ let next=new Set()
 let bytes=0, img=0, vid=0
 for(let req of keys){
 let fn=cacheNameFromUrl(req.url)
-if(!fn||fn.endsWith(".txt")) continue
+if(!fn||fn.endsWith(".txt")||next.has(fn)) continue
 next.add(fn)
 if(isCachedVideo(fn)) vid++; else img++
 let sz=0
@@ -219,7 +236,7 @@ cacheInventoryBusy=false
 function notifyServerState(state){
 if(!config||!config.cache_enabled) return
 if(!serverStateChannel) serverStateChannel=new BroadcastChannel("wall-server-state")
-if(lastBroadcastState===state) return
+if(state!=="offline" && lastBroadcastState===state) return
 lastBroadcastState=state
 serverStateChannel.postMessage({state:state})
 }
@@ -253,6 +270,7 @@ refreshCacheInventory()
 }
 }
 notifyServerState(state)
+if(typeof updateDebug==="function") updateDebug()
 }
 
 async function connectionWatchdog(){
@@ -260,7 +278,7 @@ let httpOk=false
 try{
 let ctrl=new AbortController()
 let t=setTimeout(()=>ctrl.abort(),2500)
-let res=await fetch("/api/version",{cache:"no-store",signal:ctrl.signal})
+let res=await fetch("/api/version?pf="+Date.now(),{cache:"no-store",signal:ctrl.signal})
 clearTimeout(t)
 httpOk=!!res.ok
 }catch(e){ httpOk=false }
@@ -316,9 +334,9 @@ box.innerHTML=
 "Bilder gesamt: "+total+"<br>"+
 "Durchlaufzeit: "+duration+"s<br>"+
 "Pool: "+images.length+" (Wiederholung erlaubt)<br>"+
-"Verbindung: "+(serverOnline?"online":"offline")+"<br>"+
-"Cache: "+cacheOn+(config.cache_enabled?" (TTL "+cacheTtl+"min)":"")+"<br>"+
-"Cache Inhalt: "+cacheInventory.images+" Bilder, "+cacheInventory.videos+" Videos, "+fmtCacheBytes(cacheInventory.bytes)+"<br>"+
+"Verbindung: "+(serverOnline?"verbunden":"getrennt")+"<br>"+
+"Cache: "+cacheOn+(config.cache_enabled?" (TTL "+cacheTtl+"min, max "+(config.cache_max_images||100)+" Bilder)":"")+"<br>"+
+"Browser-Cache: "+cacheInventory.images+" Bilder, "+cacheInventory.videos+" Videos, "+fmtCacheBytes(cacheInventory.bytes)+" (nur schon angezeigte Dateien)<br>"+
 "Bildschirm wach: "+wakeLockStatus
 if(debugLogs.length){
 box.innerHTML+="<br>Log:<br>"+debugLogs.join("<br>")
@@ -506,7 +524,6 @@ inner.className="gridCellInner"
 
 let img=document.createElement("img")
 img.loading="eager"
-img.src=(typeof pfUrl==="function"?pfUrl("/media/"+file):("/media/"+file))
 inner.appendChild(img)
 if(config.grid_show_frames!==false){
 if(window.applyPhotoFramePadding) applyPhotoFramePadding(inner, size, config)
@@ -610,11 +627,28 @@ requestAnimationFrame(check)
 requestAnimationFrame(check)
 }
 
-img.onload=()=>{
+let shown=false
+function startShown(){
+if(shown) return
+shown=true
 startAnimation()
 startExitWatcher()
 }
-img.onerror=()=>{
+img.onload=startShown
+let cacheTried=false
+img.onerror=async ()=>{
+if(!cacheTried){
+cacheTried=true
+let res=await cacheResponseForFile(file)
+if(res){
+try{
+let blob=await res.blob()
+img.src=URL.createObjectURL(blob)
+addDebugLog("Cache Fallback: "+file)
+return
+}catch(e){}
+}
+}
 let col=parseInt(cell.dataset.colIndex,10)
 reservedImages.delete(file)
 cell.remove()
@@ -629,6 +663,8 @@ spawnTop=maxBottom+spacingRow
 }
 spawnImage(col,spawnTop)
 }
+img.src=mediaSrc(file)
+if(img.complete && img.naturalWidth>0) startShown()
 }
 
 async function updateCacheSw(){
