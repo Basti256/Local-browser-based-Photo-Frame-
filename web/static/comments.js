@@ -51,23 +51,67 @@
     text.style.textDecoration = config.comment_underline ? "underline" : "";
   }
 
-  function attachPhotoComment(host, file, config) {
-    if (!host || !config || !config.comments_enabled) return;
-    fetch(commentUrl(file))
+  var commentCache = {};
+  var commentPending = {};
+
+  function commentCacheKey(file) {
+    return String(file || "").split("?")[0];
+  }
+
+  function fetchPhotoComment(file) {
+    var key = commentCacheKey(file);
+    if (!key) return Promise.resolve("");
+    if (Object.prototype.hasOwnProperty.call(commentCache, key)) {
+      return Promise.resolve(commentCache[key]);
+    }
+    if (commentPending[key]) return commentPending[key];
+    commentPending[key] = fetch(commentUrl(key))
       .then(function (r) { return r.ok ? r.text() : ""; })
       .then(function (comment) {
-        if (!comment) return;
-        var text = document.createElement("div");
-        text.className = "photoComment";
-        var max = parseInt(config.comment_max_length, 10) || 80;
-        text.textContent = comment.substring(0, max);
-        stylePhotoComment(text, host, config);
-        host.appendChild(text);
+        commentCache[key] = comment || "";
+        delete commentPending[key];
+        return commentCache[key];
       })
-      .catch(function () {});
+      .catch(function () {
+        delete commentPending[key];
+        return "";
+      });
+    return commentPending[key];
+  }
+
+  function applyPhotoCommentText(host, comment, config) {
+    if (!host || !comment || host.querySelector(".photoComment")) return;
+    var text = document.createElement("div");
+    text.className = "photoComment";
+    var max = parseInt(config && config.comment_max_length, 10) || 80;
+    text.textContent = comment.substring(0, max);
+    stylePhotoComment(text, host, config);
+    host.appendChild(text);
+  }
+
+  function attachPhotoComment(host, file, config) {
+    if (!host || !config || !config.comments_enabled) return;
+    var key = commentCacheKey(file);
+    if (Object.prototype.hasOwnProperty.call(commentCache, key)) {
+      applyPhotoCommentText(host, commentCache[key], config);
+      return;
+    }
+    fetchPhotoComment(file).then(function (comment) {
+      applyPhotoCommentText(host, comment, config);
+    });
+  }
+
+  function prefetchPhotoComments(files) {
+    (files || []).forEach(function (f) {
+      var ext = String(f || "").split(".").pop().toLowerCase();
+      if (ext === "txt") return;
+      fetchPhotoComment(f);
+    });
   }
 
   global.attachPhotoComment = attachPhotoComment;
+  global.prefetchPhotoComments = prefetchPhotoComments;
+  global.fetchPhotoComment = fetchPhotoComment;
   global.photoCommentUrl = commentUrl;
   global.photoFrameScale = photoFrameScale;
   global.applyPhotoFramePadding = applyPhotoFramePadding;

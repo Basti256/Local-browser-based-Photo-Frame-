@@ -1,4 +1,5 @@
 """Standardwerte der Projektkonfiguration und Schlüssel-Migration."""
+from typing import Any
 
 DEFAULT_CONFIG = {
     "wall_view_mode": "fly",
@@ -14,7 +15,7 @@ DEFAULT_CONFIG = {
     "storage_mode": "project",
     "storage_path": "",
     "port": 8000,
-    "image_spawn_interval": 6,
+    "image_spawn_interval": 6.0,
     "spawn_mode": "lanes",
     "spawn_lane_count": 6,
     "spawn_lane_order": "random_apart",
@@ -24,7 +25,7 @@ DEFAULT_CONFIG = {
     "image_max_size": 150,
     "max_videos_on_screen": 2,
     "video_playback_mode": "once",
-    "video_spawn_interval": 10,
+    "video_spawn_interval": 10.0,
     "video_min_size": 100,
     "video_max_size": 150,
     "image_rotation_strength": 90,
@@ -131,6 +132,9 @@ STORAGE_MODES = ("project", "folder")
 TEXT_ALIGNS = ("left", "center", "right")
 SPAWN_LANE_ORDERS = ("random", "random_apart", "adjacent")
 SPAWN_MODES = ("lanes", "burst", "random")
+# Seconds with 0.1 step in the admin UI. Defaults are float so merge/catalog
+# do not int()-truncate 0.6 to 0. Named set keeps that if a default is later written as 6.
+SPAWN_INTERVAL_KEYS = frozenset({"image_spawn_interval", "video_spawn_interval"})
 NETWORK_MODE_ALIASES = {
     "internal": "network",
     "local": "network",
@@ -150,6 +154,37 @@ CONFIG_MIGRATION = [
     ("highlight_color", "image_highlight_color", "video_highlight_color"),
     ("max_simultaneous_highlights", "image_max_simultaneous_highlights", "video_max_simultaneous_highlights"),
 ]
+
+
+def coerce_config_value(key: str, value: Any, default: Any) -> tuple[bool, Any]:
+    """Coerce one incoming config value. False means skip (keep the existing key)."""
+    if isinstance(default, bool):
+        return True, bool(value)
+    if key in SPAWN_INTERVAL_KEYS or isinstance(default, float):
+        try:
+            n = float(value)
+        except (TypeError, ValueError):
+            return False, None
+        if key in SPAWN_INTERVAL_KEYS:
+            n = max(0.1, round(n * 10) / 10)
+        return True, n
+    if isinstance(default, int):
+        try:
+            return True, int(value)
+        except (TypeError, ValueError):
+            return False, None
+    if isinstance(default, str):
+        return True, "" if value is None else str(value)
+    return True, value
+
+
+def apply_incoming_values(target: dict[str, Any], incoming: dict[str, Any], skip_keys) -> None:
+    for key, default in DEFAULT_CONFIG.items():
+        if key not in incoming or key in skip_keys:
+            continue
+        ok, coerced = coerce_config_value(key, incoming[key], default)
+        if ok:
+            target[key] = coerced
 
 
 def migrate_config(config: dict) -> tuple[dict, bool]:
@@ -241,6 +276,15 @@ def migrate_config(config: dict) -> tuple[dict, bool]:
     if config.get("spawn_burst_period") != burst:
         config["spawn_burst_period"] = burst
         changed = True
+    for key in SPAWN_INTERVAL_KEYS:
+        try:
+            interval = float(config.get(key, DEFAULT_CONFIG[key]))
+        except (TypeError, ValueError):
+            interval = DEFAULT_CONFIG[key]
+        interval = max(0.1, round(interval * 10) / 10)
+        if config.get(key) != interval:
+            config[key] = interval
+            changed = True
 
     for align_key in ("banner_align", "upload_greeting_align"):
         align = str(config.get(align_key) or "center").strip().lower()

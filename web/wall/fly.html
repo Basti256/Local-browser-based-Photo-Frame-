@@ -16,10 +16,12 @@
 <script src="/static/comments.js"></script>
 <script src="/static/comment-fonts.js"></script>
 <script src="/static/wall-rotate.js"></script>
+<script src="/static/wall-manager.js"></script>
 
 <link rel="stylesheet" href="/static/banner.css">
 <link rel="stylesheet" href="/static/background.css">
 <link rel="stylesheet" href="/static/wall-rotate.css">
+<link rel="stylesheet" href="/static/wall-manager.css">
 <style>
 
 body{
@@ -252,6 +254,7 @@ let imageSlideshowTimer = null
 let videoSlideshowTimer = null
 let qrTimer = null
 let bannerTimer = null
+let photowallPaused = false
 
 let currentImages=0
 let currentVideos=0
@@ -433,7 +436,7 @@ const videoTypes=["mp4","mov","webm"]
 let serverStateChannel=null
 let serverOnline=false
 let cachedImages=new Set()
-let cacheInventory={images:0,videos:0,bytes:0}
+let cacheInventory={images:0,videos:0,bytes:0,quota:0,usage:0}
 let cacheInventoryBusy=false
 let wakeLockSentinel=null
 let wakeLockActive=false
@@ -450,6 +453,23 @@ if(n<1024) return n+" B"
 if(n<1048576) return (n/1024).toFixed(1)+" KB"
 if(n<1073741824) return (n/1048576).toFixed(1)+" MB"
 return (n/1073741824).toFixed(2)+" GB"
+}
+function revokeBlobUrl(url){
+if(!url) return
+url=String(url)
+if(url.indexOf("blob:")===0){
+try{ URL.revokeObjectURL(url) }catch(e){}
+}
+}
+function revokeElMedia(el){
+if(!el) return
+revokeBlobUrl(el.getAttribute("src")||el.src||"")
+try{ el.removeAttribute("src"); el.src="" }catch(e){}
+}
+function dropFrame(frame){
+if(!frame) return
+frame.querySelectorAll("img,video").forEach(revokeElMedia)
+try{ frame.remove() }catch(e){}
 }
 function cacheNameFromUrl(url){
 return (String(url||"").split("/").pop()||"").split("?")[0]
@@ -487,10 +507,15 @@ let fn=(file||"").split("?")[0]
 if(!fn||!("caches" in window)) return null
 try{
 let cache=await caches.open("wall-media-v1")
+let direct=mediaSrc(fn)
+let res=await cache.match(direct)
+if(res) return res
+res=await cache.match(new Request(direct))
+if(res) return res
 let keys=await cache.keys()
 for(let req of keys){
 if(cacheNameFromUrl(req.url)!==fn) continue
-let res=await cache.match(req)
+res=await cache.match(req)
 if(res) return res
 }
 }catch(e){}
@@ -500,7 +525,10 @@ function wsIsOpen(){
 return !!(ws && ws.readyState===WebSocket.OPEN)
 }
 function useCachePool(){
-return !!(config&&config.cache_enabled&&!wsIsOpen())
+if(!(config&&config.cache_enabled)) return false
+if(wsIsOpen()) return false
+if(ws && ws.readyState===WebSocket.CONNECTING) return false
+return true
 }
 async function fillMediaSrc(element, file){
 if(useCachePool()){
@@ -525,7 +553,7 @@ await caches.delete("wall-media-v1")
 await caches.delete("wall-media-meta-v1")
 }catch(e){}
 cachedImages=new Set()
-cacheInventory={images:0,videos:0,bytes:0}
+cacheInventory={images:0,videos:0,bytes:0,quota:cacheInventory.quota||0,usage:0}
 addDebugLog("Cache geleert")
 if(typeof updateDebug==="function") updateDebug()
 }
@@ -585,14 +613,22 @@ try{ let j=await m.json(); sz=Number(j.s)||0 }catch(e){}
 if(!sz){
 try{
 let res=await cache.match(req)
-if(res){ let b=await res.blob(); sz=b.size||0 }
+if(res) sz=Number(res.headers.get("Content-Length"))||0
 }catch(e){}
 }
 bytes+=sz
 }
 cachedImages=next
 if(!wsIsOpen()) next.forEach(ingestCachedFilename)
-cacheInventory={images:img,videos:vid,bytes:bytes}
+let quota=0, usage=0
+try{
+if(navigator.storage&&navigator.storage.estimate){
+let est=await navigator.storage.estimate()
+quota=Number(est.quota)||0
+usage=Number(est.usage)||0
+}
+}catch(e){}
+cacheInventory={images:img,videos:vid,bytes:bytes,quota:quota,usage:usage}
 }catch(e){}
 cacheInventoryBusy=false
 }
@@ -606,7 +642,7 @@ lastWsRx=Date.now()
 function notifyServerState(state){
 if(!config||!config.cache_enabled) return
 if(!serverStateChannel) serverStateChannel=new BroadcastChannel("wall-server-state")
-if(state!=="offline" && lastBroadcastState===state) return
+if(lastBroadcastState===state) return
 lastBroadcastState=state
 serverStateChannel.postMessage({state:state})
 }
@@ -658,7 +694,14 @@ if(typeof updateDebug==="function") updateDebug()
 
 }
 
+function waitingForFirstPing(){
+if(!ws) return false
+if(ws.readyState===WebSocket.CONNECTING) return true
+return ws.readyState===WebSocket.OPEN && lastWsRx===0
+}
+
 async function connectionWatchdog(){
+if(waitingForFirstPing() && !serverOnline) return
 let httpOk=false
 try{
 let ctrl=new AbortController()
@@ -670,6 +713,7 @@ httpOk=!!res.ok
 let wsOk=ws && ws.readyState===WebSocket.OPEN
 let wsFresh=wsOk && lastWsRx>0 && (Date.now()-lastWsRx)<15000
 if(httpOk && wsFresh) setConnection("online")
+else if(waitingForFirstPing() && !serverOnline) return
 else {
 if(serverOnline && wsOk){
 try{ ws.close() }catch(e){}
@@ -706,9 +750,9 @@ connectWebSocket()
 }
 
 ws.onerror = () => {
-
+if(ws && ws.readyState===WebSocket.CONNECTING) return
+if(!serverOnline) return
 setConnection("offline")
-
 }
 
 function sendStats(){
@@ -769,7 +813,7 @@ let msg=event.data
 markWsAlive()
 
 if(msg==="__ping__"){
-if(!serverOnline) connectionWatchdog()
+setConnection("online")
 return
 }
 if(msg==="__config_reload__"){
@@ -778,6 +822,14 @@ return
 }
 if(msg==="__config_updated__"){
 await loadConfig()
+return
+}
+if(msg==="__wall_manager_updated__"){
+if(window.pfWallManager&&pfWallManager.reload) pfWallManager.reload()
+return
+}
+if(msg==="__wm_playhead__"){
+if(window.pfWallManager&&pfWallManager.sync) pfWallManager.sync()
 return
 }
 if(msg==="__media_sync__"){
@@ -867,8 +919,7 @@ reservedImages.delete(file)
 reservedVideos.delete(file)
 document.querySelectorAll(".photoFrame[data-file]").forEach(frame=>{
 if((frame.dataset.file||"").split("?")[0]!==file) return
-frame.querySelectorAll("img,video").forEach(el=>{ el.removeAttribute("src"); el.src="" })
-frame.remove()
+dropFrame(frame)
 })
 let nI=0, nV=0, nHi=0, nHv=0, nC=0
 document.querySelectorAll(".photoFrame").forEach(frame=>{
@@ -1032,8 +1083,9 @@ box.innerHTML =
 "CenterHighlights: "+currentCenterHighlights+"<br>"+
 "Spawn: "+spawnLabel+"<br>"+
 "Verbindung: "+(wsIsOpen()?"verbunden":"getrennt")+"<br>"+
-"Cache: "+cacheOn+(config.cache_enabled?" (TTL "+cacheTtl+"min, max "+(config.cache_max_images||100)+" Bilder)":"")+"<br>"+
-"Browser-Cache: "+cacheInventory.images+" Bilder, "+cacheInventory.videos+" Videos, "+fmtCacheBytes(cacheInventory.bytes)+" (nur schon angezeigte Dateien)<br>"+
+"Cache: "+cacheOn+(config.cache_enabled?" (TTL "+cacheTtl+"min, max "+(config.cache_max_images||100)+" Bilder / "+(config.cache_max_videos||20)+" Videos / "+(config.cache_max_size_mb??500)+" MB)":"")+"<br>"+
+"Browser-Cache: "+cacheInventory.images+" Bilder, "+cacheInventory.videos+" Videos, "+fmtCacheBytes(cacheInventory.bytes)+(cacheInventory.quota?" · Quota "+fmtCacheBytes(cacheInventory.usage)+"/"+fmtCacheBytes(cacheInventory.quota):"")+" (nur schon angezeigte Dateien)<br>"+
+((window.pfWallManager&&pfWallManager.debugLine)?(pfWallManager.debugLine()+"<br>"):"")+
 "Bildschirm wach: "+wakeLockStatus
 
 if(debugLogs.length){
@@ -1067,6 +1119,7 @@ let files=await res.json()
 if(!Array.isArray(files)) files=[]
 for(let f of files) addMedia(f)
 mediaListLoaded=true
+if(window.prefetchPhotoComments) prefetchPhotoComments(files)
 }catch(e){
 addDebugLog("Bilderlisten-Fehler")
 }
@@ -1078,11 +1131,12 @@ addDebugLog("Bilderlisten-Fehler")
 async function updateCacheSw(){
 if(config.cache_enabled&&"serviceWorker"in navigator){
 try{
-await navigator.serviceWorker.register("/sw.js?t="+Date.now(),{scope:"/"})
+let swUrl=(typeof pfUrl==="function"?pfUrl("/sw.js"):"/sw.js")+"?t="+Date.now()
+let swScope=(typeof PF_BASE==="string" && PF_BASE)?(String(PF_BASE).replace(/\/$/,"")+"/"):"/"
+await navigator.serviceWorker.register(swUrl,{scope:swScope})
 addDebugLog("Cache SW registriert (TTL "+(config.cache_ttl_minutes||30)+"min)")
 console.log("[WALL] Cache SW registriert")
-lastBroadcastState=null
-notifyServerState(serverOnline?"online":"offline")
+notifyServerState("online")
 await refreshCacheInventory()
 }catch(e){ addDebugLog("Cache SW Fehler: "+e.message); console.error("[WALL] Cache SW:",e) }
 }else if("serviceWorker"in navigator){
@@ -1118,10 +1172,8 @@ setupQR()
 setupBanner()
 await updateCacheSw()
 
-// Slideshow-Timer nach Config-Änderung neu starten
-imageSlideshowTimer = setInterval(showRandomImage,config.image_spawn_interval*1000)
-videoSlideshowTimer = setInterval(showRandomVideo,config.video_spawn_interval*1000)
 updateLaneDebug()
+if(imageSlideshowTimer) startPhotowallSlideshow()
 
 }
 
@@ -1439,9 +1491,17 @@ banner.style.opacity=0
 
 
 
+function unreserveFile(file){
+if(!file) return
+let ext=String(file).split(".").pop().toLowerCase()
+if(videoTypes.includes(ext)) reservedVideos.delete(file)
+else reservedImages.delete(file)
+}
+
 function processHighlightQueue(){
 
 if(highlightWorkerRunning) return
+if(photowallPaused) return
 if(!serverOnline) return
 
 highlightWorkerRunning=true
@@ -1461,7 +1521,10 @@ currentImages<config.max_images_on_screen &&
 let file=imageHighlightQueue.shift()
 currentImageHighlights++
 if(config.center_highlight_enabled) currentCenterHighlights++
-spawnMedia(file,true)
+if(spawnMedia(file,true)===false){
+currentImageHighlights=Math.max(0,currentImageHighlights-1)
+if(config.center_highlight_enabled) currentCenterHighlights=Math.max(0,currentCenterHighlights-1)
+}
 centerLimit=config.center_highlight_enabled&&(currentCenterHighlights>=centerMax)
 
 }
@@ -1476,7 +1539,10 @@ currentVideos<config.max_videos_on_screen &&
 let file=videoHighlightQueue.shift()
 currentVideoHighlights++
 if(config.center_highlight_enabled) currentCenterHighlights++
-spawnMedia(file,true)
+if(spawnMedia(file,true)===false){
+currentVideoHighlights=Math.max(0,currentVideoHighlights-1)
+if(config.center_highlight_enabled) currentCenterHighlights=Math.max(0,currentCenterHighlights-1)
+}
 centerLimit=config.center_highlight_enabled&&(currentCenterHighlights>=centerMax)
 
 }
@@ -1520,8 +1586,76 @@ return chosen
 }
 
 
+function startPhotowallSlideshow(){
+photowallPaused=false
+if(imageSlideshowTimer) clearInterval(imageSlideshowTimer)
+if(videoSlideshowTimer) clearInterval(videoSlideshowTimer)
+if(!config) return
+imageSlideshowTimer = setInterval(showRandomImage,(config.image_spawn_interval||6)*1000)
+videoSlideshowTimer = setInterval(showRandomVideo,(config.video_spawn_interval||10)*1000)
+if(!document.querySelector(".photoFrame")){
+showRandomImage()
+showRandomVideo()
+}
+}
+
+function pausePhotowall(){
+photowallPaused=true
+if(imageSlideshowTimer){ clearInterval(imageSlideshowTimer); imageSlideshowTimer=null }
+if(videoSlideshowTimer){ clearInterval(videoSlideshowTimer); videoSlideshowTimer=null }
+document.querySelectorAll(".photoFrame").forEach(frame=>{
+try{
+let tr=getComputedStyle(frame).transform
+frame.style.transition="none"
+if(tr && tr!=="none") frame.style.transform=tr
+}catch(e){}
+frame.querySelectorAll("video").forEach(v=>{ try{ v.pause() }catch(e){} })
+})
+}
+
+function resumePhotowall(){
+photowallPaused=false
+document.querySelectorAll(".photoFrame").forEach(frame=>{
+let to=frame.dataset.wmFlyTo
+let ms=frame.dataset.wmFlyMs||"30000"
+if(to){
+void frame.offsetWidth
+frame.style.transition="transform "+ms+"ms linear"
+frame.style.transform=to
+}
+frame.querySelectorAll("video").forEach(v=>{ try{ v.play() }catch(e){} })
+})
+startPhotowallSlideshow()
+}
+
+function clearPhotowallFrames(){
+document.querySelectorAll(".photoFrame").forEach(f=>dropFrame(f))
+currentImages=0
+currentVideos=0
+currentImageHighlights=0
+currentVideoHighlights=0
+currentCenterHighlights=0
+reservedImages.clear()
+reservedVideos.clear()
+}
+
+function restartPhotowall(){
+clearPhotowallFrames()
+startPhotowallSlideshow()
+}
+
+window.pfPhotowall={
+pause:pausePhotowall,
+resume:resumePhotowall,
+start:restartPhotowall,
+clear:clearPhotowallFrames,
+startTimers:startPhotowallSlideshow,
+isPaused:function(){ return photowallPaused }
+}
+
 function showRandomImage(){
 
+if(photowallPaused) return
 if(currentImages>=config.max_images_on_screen) return
 
 let file = chooseRandomImage()
@@ -1534,6 +1668,7 @@ spawnMedia(file,false)
 
 function showRandomVideo(){
 
+if(photowallPaused) return
 if(currentVideos>=config.max_videos_on_screen) return
 
 let file = chooseRandomVideo()
@@ -1548,8 +1683,12 @@ spawnMedia(file,false)
 
 function spawnMedia(file,isHighlight=false){
 
-if(!file) return
-if(!images.includes(file) && !videos.includes(file) && !cachedImages.has((file||"").split("?")[0])) return
+if(!file) return false
+if(photowallPaused){ unreserveFile(file); return false }
+if(!images.includes(file) && !videos.includes(file) && !cachedImages.has((file||"").split("?")[0])){
+unreserveFile(file)
+return false
+}
 
 let ext=file.split(".").pop().toLowerCase()
 
@@ -1557,11 +1696,11 @@ let isVideo = videoTypes.includes(ext)
 
 if(isVideo){
 
-if(currentVideos>=config.max_videos_on_screen) return
+if(currentVideos>=config.max_videos_on_screen){ unreserveFile(file); return false }
 
 }else{
 
-if(currentImages>=config.max_images_on_screen) return
+if(currentImages>=config.max_images_on_screen){ unreserveFile(file); return false }
 
 }
 
@@ -1640,8 +1779,11 @@ function beginCssFly(){
 stopFrameTransition()
 frame.style.transform=flyStartTransform()
 void frame.offsetWidth
+let flyTo=flyOffscreenTransform()
+frame.dataset.wmFlyTo=flyTo
+frame.dataset.wmFlyMs=String(duration*1000)
 frame.style.transition="transform "+(duration*1000)+"ms linear"
-frame.style.transform=flyOffscreenTransform()
+frame.style.transform=flyTo
 }
 
 function startFlight(){
@@ -1666,6 +1808,11 @@ let lastTime = performance.now()
 function step(now){
 
 if(!document.body.contains(frame)) return
+if(photowallPaused){
+lastTime = now
+requestAnimationFrame(step)
+return
+}
 
 let dt = (now - lastTime) / 1000
 lastTime = now
@@ -1702,6 +1849,10 @@ function check(){
 if(!document.body.contains(frame)){
     return
 }
+if(photowallPaused){
+requestAnimationFrame(check)
+return
+}
 
 let rect = wallClientRect(frame)
 
@@ -1715,7 +1866,7 @@ if(
 
     // Positionsbasierter Exit jetzt für Bilder und Videos
     if(videoTypes.includes(ext)) reservedVideos.delete(file); else reservedImages.delete(file)
-    frame.remove()
+    dropFrame(frame)
 
     if(!videoTypes.includes(ext)) currentImages = Math.max(0, currentImages-1)
     if(videoTypes.includes(ext))  currentVideos = Math.max(0, currentVideos-1)
@@ -1791,7 +1942,7 @@ frame.style.transition="opacity "+exitMs+"ms ease"
 frame.style.opacity="0"
 setTimeout(()=>{
 reservedVideos.delete(file)
-frame.remove()
+dropFrame(frame)
 currentCenterHighlights=Math.max(0,currentCenterHighlights-1)
 currentVideoHighlights=Math.max(0,currentVideoHighlights-1)
 currentVideos=Math.max(0,currentVideos-1)
@@ -1968,7 +2119,7 @@ frame.style.transition="opacity "+exitMs+"ms ease"
 frame.style.opacity="0"
 setTimeout(()=>{
 reservedImages.delete(file)
-frame.remove()
+dropFrame(frame)
 currentCenterHighlights=Math.max(0,currentCenterHighlights-1)
 currentImageHighlights=Math.max(0,currentImageHighlights-1)
 currentImages=Math.max(0,currentImages-1)
@@ -2038,6 +2189,8 @@ try{ element.onload() }catch(e){}
 })
 }
 
+return true
+
 }
 
 
@@ -2050,6 +2203,9 @@ await loadImages()
 
 connectWebSocket()
 connectionWatchdog()
+
+if(window.pfWallManager&&pfWallManager.boot) await pfWallManager.boot()
+else startPhotowallSlideshow()
 
 setInterval(updateDebug,500)
 

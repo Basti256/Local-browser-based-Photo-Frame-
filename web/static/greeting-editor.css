@@ -12,22 +12,20 @@ width:auto;
 margin:0;
 padding:8px 12px;
 font-size:13px;
-background:#ececec;
-color:#222;
-border:1px solid #ccc;
-border-radius:6px;
+background:var(--pf-fill, #ececec);
+color:var(--pf-ink, #222);
+border:1px solid var(--pf-stroke, #ccc);
 cursor:pointer;
 }
 .greetingEditor-toolbar button:hover,
 .greetingEditor-toolbar button.is-on{
-background:#dbe8ff;
-border-color:#8aaee0;
+background:var(--pf-help, #dbe8ff);
+border-color:var(--pf-accent, #8aaee0);
 }
 .greetingEditor-stage{
-border:1px solid #ccc;
-border-radius:8px;
+border:1px solid var(--pf-stroke, #ccc);
 overflow:hidden;
-background:#f5f7fb;
+background:var(--pf-fill, #f5f7fb);
 padding:20px 16px;
 min-height:120px;
 }
@@ -76,7 +74,7 @@ margin:0.12em 0;
 }
 .greetingEditor-meta{
 font-size:13px;
-color:#666;
+color:var(--pf-muted, #666);
 margin-top:8px;
 }
 .greetingEditor-source{

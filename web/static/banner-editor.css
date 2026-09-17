@@ -14,16 +14,15 @@ width:auto;
 margin:0;
 padding:8px 12px;
 font-size:13px;
-background:#ececec;
-color:#222;
-border:1px solid #ccc;
-border-radius:6px;
+background:var(--pf-fill, #ececec);
+color:var(--pf-ink, #222);
+border:1px solid var(--pf-stroke, #ccc);
 cursor:pointer;
 }
 .bannerEditor-toolbar button:hover,
 .bannerEditor-toolbar button.is-on{
-background:#dbe8ff;
-border-color:#8aaee0;
+background:var(--pf-help, #dbe8ff);
+border-color:var(--pf-accent, #8aaee0);
 }
 .bannerEditor-viewport{
 position:relative;
@@ -94,7 +93,7 @@ text-align:left;
 }
 .bannerEditor-meta{
 font-size:13px;
-color:#666;
+color:var(--pf-muted, #666);
 margin-top:8px;
 }
 .bannerEditor-source{

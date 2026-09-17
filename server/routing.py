@@ -208,14 +208,19 @@ def reset_request_context(t_proj, t_pref) -> None:
 
 
 def control_only_blocked(scope: Scope, path: str) -> bool:
-    port_name = runner.project_for_port(_scope_port(scope))
-    return bool(port_name and is_control_only(path))
+    """Setup/Login und projektverwaltende APIs nur ohne Projekt-Prefix (und nicht auf einem Projekt-Port)."""
+    if not is_control_only(path):
+        return False
+    if runner.project_for_port(_scope_port(scope)):
+        return True
+    return bool(state_value(scope, "url_prefix"))
 
 
 def setup_redirect_response(request, send_status: int = 302):
     from fastapi.responses import RedirectResponse
     from server.restart import listen_port
     path = request.url.path
-    if path.startswith("/api/"):
+    prefix = state_value(request.scope, "url_prefix") or ""
+    if path.startswith("/api/") or prefix:
         return empty_not_found()
     return RedirectResponse(setup_url_for_port(request, listen_port()), status_code=send_status)

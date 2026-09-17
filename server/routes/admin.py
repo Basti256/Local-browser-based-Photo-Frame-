@@ -25,7 +25,13 @@ from server.pin import (
     try_pin,
     wait_seconds_remaining,
 )
-from server.project import IMAGE_EXT, VIDEO_EXT, get_paths, require_paths, safe_join
+from server.catalog import (
+    apply_wall_template,
+    list_templates,
+    save_template_from_project,
+    wall_summary,
+)
+from server.project import IMAGE_EXT, VIDEO_EXT, get_paths, load_project_config, require_paths, safe_join
 from server.routes.wall import broadcast, broadcast_config, broadcast_hide, broadcast_media_sync, clients
 from server.transcode import display_name_for
 
@@ -45,6 +51,15 @@ class HideBody(BaseModel):
 class BatchBody(BaseModel):
     names: list[str]
     action: str
+
+
+class TemplateApplyBody(BaseModel):
+    template_id: str
+
+
+class TemplateSaveBody(BaseModel):
+    name: str
+    description: str = ""
 
 
 @router.get("/api/admin/pin-status")
@@ -70,6 +85,48 @@ def admin_unlock(body: PinBody, request: Request):
     set_admin_session(response, paths.name, request)
     return response
 
+
+
+@router.get("/api/admin/templates")
+def admin_list_templates(_project: str = Depends(require_admin_pin)):
+    paths = require_paths()
+    cfg = load_project_config(paths)
+    return {
+        "ok": True,
+        "project": paths.name,
+        "current": {
+            "id": "current",
+            "name": paths.name,
+            "summary": wall_summary(cfg),
+        },
+        "templates": list_templates(with_summary=True),
+    }
+
+
+@router.post("/api/admin/templates/apply")
+async def admin_apply_template(body: TemplateApplyBody, _project: str = Depends(require_admin_pin)):
+    tid = (body.template_id or "").strip()
+    if not tid or tid == "current":
+        raise HTTPException(status_code=400, detail="Bitte eine Vorlage wählen.")
+    paths = require_paths()
+    old = load_project_config(paths)
+    apply_wall_template(paths, tid)
+    new = load_project_config(paths)
+    try:
+        old_rot = int(old.get("wall_display_rotation") or 0)
+        new_rot = int(new.get("wall_display_rotation") or 0)
+    except (TypeError, ValueError):
+        old_rot, new_rot = 0, 0
+    view_changed = old.get("wall_view_mode") != new.get("wall_view_mode")
+    await broadcast_config(reload_full=view_changed or old_rot != new_rot)
+    return {"ok": True, "view_changed": view_changed}
+
+
+@router.post("/api/admin/templates")
+def admin_save_template(body: TemplateSaveBody, _project: str = Depends(require_admin_pin)):
+    paths = require_paths()
+    meta = save_template_from_project(paths, body.name, body.description)
+    return {"ok": True, "template": meta}
 
 
 @router.get("/api/admin/stats")

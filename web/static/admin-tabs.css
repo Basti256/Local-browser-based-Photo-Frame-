@@ -6,29 +6,32 @@ margin:12px 0 8px 0;
 position:sticky;
 top:0;
 z-index:40;
-background:#fff;
+background:var(--pf-elev, #fff);
 padding:8px 0 10px;
-border-bottom:1px solid #e5e5e5;
+border-bottom:1px solid var(--pf-stroke, #e5e5e5);
 }
 .adminTabs button{
 width:auto;
 margin:0;
-padding:10px 16px;
-font-size:15px;
-background:#ececec;
-color:#222;
-border:1px solid #ccc;
+padding:8px 12px;
+font-size:13px;
+background:var(--pf-elev, #ececec);
+color:var(--pf-muted, #222);
+border:1px solid var(--pf-stroke, #ccc);
+border-radius:0;
 }
 .adminTabs button.is-on{
-background:#4CAF50;
-color:#fff;
-border-color:#4CAF50;
+background:var(--pf-fill, #eceae6);
+color:var(--pf-ink, #1b1b1b);
+border-color:var(--pf-stroke-strong, #1b1b1b);
+font-weight:650;
 }
 .adminClassicLink{
-font-size:13px;
-color:#666;
+font-size:12px;
+color:var(--pf-faint, #666);
 margin:0 0 12px;
 }
+.adminClassicLink a{color:var(--pf-accent, #1f4d7a);}
 .tabPanel{display:none;}
 .tabPanel.is-on{display:block;}
 .mediaToggle{
@@ -41,14 +44,14 @@ width:auto;
 margin:0;
 padding:8px 14px;
 font-size:14px;
-background:#ececec;
-color:#222;
-border:1px solid #ccc;
+background:var(--pf-fill, #ececec);
+color:var(--pf-ink, #222);
+border:1px solid var(--pf-stroke, #ccc);
 }
 .mediaToggle button.is-on{
-background:#333;
-color:#fff;
-border-color:#333;
+background:var(--pf-ink, #333);
+color:var(--pf-bg, #fff);
+border-color:var(--pf-ink, #333);
 }
 .mediaPane{display:none;}
 .mediaPane.is-on{display:block;}
@@ -56,20 +59,21 @@ border-color:#333;
 position:sticky;
 bottom:0;
 z-index:40;
-background:#fff;
+background:var(--pf-elev, #fff);
 padding:12px 0 0;
 margin-top:20px;
-border-top:1px solid #e5e5e5;
+border-top:1px solid var(--pf-stroke, #e5e5e5);
 }
 .adminSaveBar button{
 margin-top:8px;
 margin-bottom:8px;
+width:100%;
 }
 .wallMediaBar{
 position:sticky;
 top:58px;
 z-index:39;
-background:#fff;
+background:var(--pf-elev, #fff);
 padding:6px 0 4px;
 margin-bottom:4px;
 }

@@ -4,21 +4,36 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Admin-PIN</title>
-<link rel="stylesheet" href="/static/ui.css">
+<script>
+(function(){try{var t=localStorage.getItem("pf-admin-theme");if(t==="light"||t==="dark"||t==="system")document.documentElement.setAttribute("data-theme",t);else document.documentElement.setAttribute("data-theme","system");}catch(e){document.documentElement.setAttribute("data-theme","system");}})();
+</script>
+<link rel="stylesheet" href="/static/admin-theme.css">
+<script src="/static/admin-theme.js"></script>
 </head>
-<body>
-<div class="wrap">
-<div class="card">
-<h1>Admin-PIN</h1>
-<p class="muted" id="hint">PIN des aktiven Projekts eingeben. Den PIN siehst du in der Einrichtung.</p>
+<body class="pf-admin">
+<div class="pf-wrap narrow">
+<header class="pf-chrome">
+<div class="pf-chrome-top">
+<span class="pf-chrome-title">Projekt-Admin</span>
+<span class="pf-chrome-hint">PIN</span>
+<div data-pf-theme></div>
+</div>
+<div class="pf-chrome-links">
+<a href="/setup">Zur Einrichtung</a>
+<span class="sep">·</span>
+<span class="pf-chrome-hint">Master-Konto</span>
+</div>
+</header>
+<div class="pf-card">
+<h1 class="pf-page-title">Admin-PIN</h1>
+<p class="pf-note" id="hint">PIN des aktiven Projekts eingeben. Den PIN siehst du in der Einrichtung.</p>
 <form id="f">
 <label for="pin">PIN</label>
 <input id="pin" name="pin" inputmode="numeric" autocomplete="one-time-code" required>
 <div class="error" id="err" hidden></div>
-<p class="muted" id="wait" hidden></p>
+<p class="pf-note" id="wait" hidden></p>
 <button type="submit" id="btn">Freischalten</button>
 </form>
-<p class="muted"><a href="/setup">Zur Einrichtung</a> (Master-Konto)</p>
 </div>
 </div>
 <script>

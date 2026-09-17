@@ -30,7 +30,7 @@ def _page(*parts: str) -> HTMLResponse:
     prefix = get_url_prefix() or ""
     inject = (
         f'<meta name="pf-base" content="{html_lib.escape(prefix, quote=True)}">'
-        f'<script src="/static/js/pf-base.js"></script>'
+        f'<script src="/static/js/pf-base.js?v={html_lib.escape(__version__, quote=True)}"></script>'
     )
     text, n = _HEAD_RE.subn(lambda m: m.group(0) + inject, text, count=1)
     if n == 0:
@@ -38,6 +38,13 @@ def _page(*parts: str) -> HTMLResponse:
     v = html_lib.escape(__version__, quote=True)
     text = text.replace("/static/wall-rotate.js", f"/static/wall-rotate.js?v={v}")
     text = text.replace("/static/wall-rotate.css", f"/static/wall-rotate.css?v={v}")
+    text = text.replace("/static/wall-manager.js", f"/static/wall-manager.js?v={v}")
+    text = text.replace("/static/wall-manager.css", f"/static/wall-manager.css?v={v}")
+    text = text.replace("/static/wall-manager-admin.js", f"/static/wall-manager-admin.js?v={v}")
+    text = text.replace("/static/setup-preview.css", f"/static/setup-preview.css?v={v}")
+    text = text.replace("/static/setup-preview.js", f"/static/setup-preview.js?v={v}")
+    text = text.replace("/static/admin-photowall.css", f"/static/admin-photowall.css?v={v}")
+    text = text.replace("/static/admin-photowall.js", f"/static/admin-photowall.js?v={v}")
     return HTMLResponse(
         text,
         headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
@@ -141,6 +148,19 @@ def admin_browser_page(request: Request):
     if not has_pin(paths) or admin_project(request) != paths.name:
         return _page("admin", "pin.html")
     return _page("admin", "browser.html")
+
+
+@router.get("/admin/preview")
+def admin_preview_page(request: Request):
+    gated = _project_html_gate(request)
+    if gated is not None:
+        return gated
+    paths = get_paths()
+    if paths is None:
+        return _redirect_single_or_none(request, "/admin/preview")
+    if not has_pin(paths) or admin_project(request) != paths.name:
+        return _page("admin", "pin.html")
+    return _page("admin", "setup-preview.html")
 
 
 def _project_html_gate(request: Request):

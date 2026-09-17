@@ -1,6 +1,6 @@
 # Local-browser-based-Photo-Frame
 
-**Version 2.20.14**
+**Version 2.27.0**
 
 Browserbasierter Foto-Rahmen: Gäste laden Bilder und Videos über eine Upload-Seite. Eine Wall zeigt die Medien in Echtzeit. Die Einrichtung liegt unter `/setup` (Konto **Admin**). Die Wand-Einstellungen unter `/admin` sind per Projekt-PIN geschützt.
 
@@ -100,11 +100,13 @@ Danach den Server neu starten (`./start.sh` / `start.bat`, oder `sudo systemctl 
 ## Funktionen
 
 - Projekte mit eigener Config, Medien, PIN; unter `/{name}/` am Serverport; Start/Stop und Löschen unter `/setup`; Config als ZIP laden/exportieren (`config.json` und Hintergründe)
-- Config-Vorlagen und Standardhintergründe unter `/setup`, nutzbar in allen Projekten
+- Config-Vorlagen und Standardhintergründe unter `/setup`; unter `/admin` Wand lassen sich Vorlagen anwenden und die aktuelle Wand als Vorlage speichern (nur Wand-Schlüssel)
 - Medienspeicher serverweit (Ordner mit Unterverzeichnis je Projekt) oder im jeweiligen Projektordner
 - QR-Code zur Upload-Seite gemäß Projekt-Netzwerkmodus
 - PIN-geschützter Medienbrowser: Mehrfachauswahl, Verstecken, Löschen, ZIP-Download
-- Wall: Fly-Modus und Grid-Modus; Anzeige drehbar (0°/90°/180°/270°) unter `/admin` Wand → Spezial, wenn das Gerät keinen Hochkant-Bildschirm kann; Admin mit Reitern, vorherige Ansicht unter `/admin/classic`; Fly-Spawn Bahnen, Burst oder Zufall
+- Wall: Fly-Modus und Grid-Modus; Anzeige drehbar (0°/90°/180°/270°) unter `/admin` Wand → Anzeige; Admin mit Reitern inkl. Wall Manager, vorherige Ansicht unter `/admin/classic`; klickbare Attrappe unter `/static/setup-preview.html` (ohne PIN, speichert nicht; `/admin/preview` optional nach Neustart); Fly-Spawn Bahnen, Burst oder Zufall; Bild- und Video-Werte nebeneinander ohne Umschalter
+- Wall Manager: Effekte Aus/Einblenden (über Schwarz), Weiche Blende, Wischblende, Aufpoppen, Harter Schnitt
+- Admin-Chrome (nicht die Gäste-Wand): Hell / Dunkel / System, gespeichert im Browser (`localStorage`). Gleiche Tokens auf PIN, Medienbrowser, Upload und Attrappe
 - Upload-Seite: mehrzeilige Begrüßung, Header-Bild mit Upload und Drehung
 - WebSocket-Aktualisierung bei Uploads
 - Serverseitiges Bild-Skalieren; Videos mit ffmpeg nach H.264/AAC

@@ -1,0 +1,221 @@
+.pw{
+  --pw-stroke:var(--pf-stroke, #d4d1cb);
+  --pw-stroke-strong:var(--pf-stroke-strong, #1b1b1b);
+  --pw-accent:var(--pf-accent, #1f4d7a);
+  --pw-muted:var(--pf-muted, #5a5a5a);
+  --pw-faint:var(--pf-faint, #7a7a7a);
+  --pw-fill:var(--pf-fill, #eceae6);
+  --pw-elev:var(--pf-elev, #fff);
+}
+
+.pw .pw-note,
+.pw .pw-faint{
+  margin:0 0 8px;
+  font-size:13px;
+  font-weight:normal;
+}
+.pw .pw-note{color:var(--pw-muted);}
+.pw .pw-faint{color:var(--pw-faint);font-size:12px;}
+
+.pw .pw-sec{
+  margin:22px 0 8px;
+  font-size:16px;
+  font-weight:650;
+}
+
+.pw .pw-sub{
+  margin:14px 0 6px;
+  font-size:13px;
+  font-weight:650;
+  color:var(--pw-muted);
+}
+
+.pw .pw-box{
+  border:1px solid var(--pw-stroke);
+  background:var(--pw-elev);
+  padding:12px;
+  margin-bottom:10px;
+}
+
+.pw .pw-box.accent{border-color:var(--pw-accent);}
+
+.pw .pw-h{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  font-size:12px;
+  font-weight:650;
+  color:var(--pw-muted);
+  margin:0 0 8px;
+}
+
+.pw .pw-box.accent .pw-h{color:var(--pw-accent);}
+
+.pw .pw-ico{
+  display:block;
+  flex-shrink:0;
+  width:14px;
+  height:14px;
+  color:currentColor;
+}
+
+.pw .pw-grid2{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+
+.pw .pw-cfg-list{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+}
+
+.pw .pw-cfg{
+  display:block;
+  width:100%;
+  text-align:left;
+  padding:8px 10px;
+  margin:0;
+  border:1px solid var(--pw-stroke);
+  background:var(--pw-elev);
+  color:var(--pf-ink, #222);
+  font-size:13px;
+}
+
+.pw .pw-cfg b{display:block;margin:2px 0;font-size:14px;}
+.pw .pw-cfg-k{display:block;font-size:11px;color:var(--pw-faint);}
+.pw .pw-cfg.is-on{border-color:var(--pw-accent);box-shadow:inset 0 0 0 1px var(--pw-accent);}
+.pw .pw-cfg:disabled{opacity:0.55;cursor:default;}
+
+.pw .pw-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  align-items:flex-end;
+  margin-top:10px;
+}
+
+.pw .pw-btn,
+.pw button.pw-btn{
+  width:auto;
+  margin:0;
+  padding:8px 12px;
+  font-size:14px;
+  background:var(--pf-fill, #ececec);
+  color:var(--pf-ink, #222);
+  border:1px solid var(--pf-stroke, #ccc);
+}
+
+.pw .pw-btn.primary{
+  background:var(--pf-ok-fill, #2d6a3e);
+  color:#fff;
+  border-color:var(--pf-ok-fill, #2d6a3e);
+}
+
+.pw .pw-btn:disabled{opacity:0.5;cursor:default;}
+
+.pw .pw-status{
+  margin:8px 0 0;
+  font-size:13px;
+  color:var(--pw-muted);
+  min-height:1.2em;
+}
+.pw .pw-status.is-err{color:var(--pf-danger, #a33);}
+.pw .pw-status.is-ok{color:var(--pf-ok, #1a5c3a);}
+
+.pw .pw-pair{
+  display:grid;
+  margin:0 0 8px;
+}
+
+.pw .pw-pair-h,
+.pw .pw-pair-r{
+  display:grid;
+  grid-template-columns:minmax(7.4rem,1.35fr) 1fr 1fr;
+  gap:8px;
+  align-items:center;
+  padding:5px 0;
+}
+
+.pw .pw-pair-r + .pw-pair-r{border-top:1px solid var(--pw-stroke);}
+
+.pw .pw-pair-h{
+  font-size:11px;
+  font-weight:650;
+  color:var(--pw-faint);
+}
+
+.pw .pw-pair-r > span:first-child{
+  color:var(--pw-muted);
+  font-size:13px;
+  font-weight:normal;
+}
+
+.pw .pw-pair input,
+.pw .pw-pair select{
+  width:100%;
+  margin:0;
+  padding:8px;
+}
+
+.pw .pw-pair input.checkbox{
+  width:auto;
+  justify-self:start;
+}
+
+.pw .pw-na{
+  color:var(--pw-faint);
+  font-weight:normal;
+}
+
+.pw label{
+  display:block;
+}
+
+.pw input:not(.checkbox),
+.pw select,
+.pw textarea{
+  margin-bottom:10px;
+  padding:8px 10px;
+}
+
+.pw .row{
+  margin-bottom:6px;
+}
+
+.pw .row input.checkbox{margin:0;}
+
+.pw .helpText,
+.pw .sectionInfo{
+  margin-bottom:10px;
+}
+
+.pw .bgRotate button,
+.pw #background_upload_btn{
+  width:auto;
+  margin:0 8px 10px 0;
+  padding:8px 12px;
+  font-size:14px;
+}
+
+.pw #pw_tpl_name,
+.pw #pw_tpl_desc{
+  max-width:28rem;
+}
+
+@media (max-width:760px){
+  .pw .pw-grid2,
+  .pw .pw-cfg-list{grid-template-columns:1fr;}
+  .pw .pw-pair-h,
+  .pw .pw-pair-r{
+    grid-template-columns:1fr 1fr;
+  }
+  .pw .pw-pair-h span:first-child,
+  .pw .pw-pair-r > span:first-child{
+    grid-column:1 / -1;
+  }
+  .pw .pw-pair-r > span:first-child{font-weight:650;}
+  .pw .pw-pair-r input,
+  .pw .pw-pair-r select{margin-bottom:4px;}
+}

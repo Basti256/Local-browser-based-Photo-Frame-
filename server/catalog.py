@@ -11,7 +11,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from server.defaults import DEFAULT_CONFIG
+from server.defaults import apply_incoming_values
 from server.paths import DATA_DIR
 from server.project import (
     IMAGE_EXT,
@@ -54,31 +54,140 @@ def _clean_text(value: str, max_len: int, *, required: bool) -> str:
     return text
 
 
+WALL_KEYS = frozenset({
+    "wall_view_mode",
+    "wall_display_rotation",
+    "grid_columns",
+    "grid_animation_duration",
+    "grid_show_frames",
+    "grid_spacing_rows",
+    "grid_spacing_columns",
+    "frame_padding_top",
+    "frame_padding_side",
+    "frame_padding_bottom",
+    "image_spawn_interval",
+    "spawn_mode",
+    "spawn_lane_count",
+    "spawn_lane_order",
+    "spawn_burst_period",
+    "max_images_on_screen",
+    "image_min_size",
+    "image_max_size",
+    "max_videos_on_screen",
+    "video_playback_mode",
+    "video_spawn_interval",
+    "video_min_size",
+    "video_max_size",
+    "image_rotation_strength",
+    "image_drift_strength",
+    "image_rotation_direction_mode",
+    "image_flight_path_mode",
+    "image_animation_duration",
+    "image_speed_variation_enabled",
+    "image_speed_variation_strength",
+    "image_highlight_new",
+    "image_highlight_duration",
+    "image_highlight_color",
+    "image_max_simultaneous_highlights",
+    "video_rotation_strength",
+    "video_drift_strength",
+    "video_rotation_direction_mode",
+    "video_flight_path_mode",
+    "video_animation_duration",
+    "video_speed_variation_enabled",
+    "video_speed_variation_strength",
+    "video_highlight_new",
+    "video_highlight_duration",
+    "video_highlight_color",
+    "video_max_simultaneous_highlights",
+    "center_highlight_enabled",
+    "center_highlight_duration",
+    "center_highlight_mode",
+    "center_highlight_entry_speed",
+    "center_highlight_exit_speed",
+    "center_highlight_screen_percent",
+    "center_highlight_max_simultaneous",
+    "center_highlight_position_variation",
+    "show_qr_code",
+    "qr_text",
+    "qr_size",
+    "qr_text_size",
+    "qr_position",
+    "qr_text_color",
+    "qr_dynamic_enabled",
+    "qr_show_duration",
+    "qr_hide_duration",
+    "banner_enabled",
+    "banner_text",
+    "banner_position",
+    "banner_height",
+    "banner_color",
+    "banner_text_color",
+    "banner_show_duration",
+    "banner_hide_duration",
+    "banner_align",
+    "banner_font",
+    "cache_enabled",
+    "cache_ttl_minutes",
+    "cache_max_images",
+    "cache_max_videos",
+    "cache_max_size_mb",
+    "comments_enabled",
+    "comment_font",
+    "comment_color",
+    "comment_size",
+    "comment_bold",
+    "comment_underline",
+    "background_mode",
+    "background_color",
+    "background_image",
+    "background_rotation",
+    "background_brightness",
+    "background_contrast",
+    "background_position",
+    "background_scale",
+    "background_opacity",
+})
+
+
 def wall_config_from_incoming(incoming: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(incoming, dict):
         raise HTTPException(status_code=400, detail="Keine gültige Config.")
     cfg: dict[str, Any] = {}
-    for key, default in DEFAULT_CONFIG.items():
-        if key in SETUP_OWNED_KEYS or key not in incoming:
-            continue
-        value = incoming[key]
-        if isinstance(default, bool):
-            cfg[key] = bool(value)
-        elif isinstance(default, int) and not isinstance(default, bool):
-            try:
-                cfg[key] = int(value)
-            except (TypeError, ValueError):
-                continue
-        elif isinstance(default, float):
-            try:
-                cfg[key] = float(value)
-            except (TypeError, ValueError):
-                continue
-        elif isinstance(default, str):
-            cfg[key] = "" if value is None else str(value)
-        else:
-            cfg[key] = value
+    apply_incoming_values(cfg, incoming, SETUP_OWNED_KEYS)
     return cfg
+
+
+def wall_keys_only(incoming: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in wall_config_from_incoming(incoming).items() if key in WALL_KEYS}
+
+
+def wall_summary(cfg: dict[str, Any]) -> str:
+    view = "Grid" if str(cfg.get("wall_view_mode") or "fly") == "grid" else "Fly"
+    spawn = {"lanes": "Bahnen", "burst": "Burst", "random": "Zufall"}.get(
+        str(cfg.get("spawn_mode") or "lanes"), "Bahnen"
+    )
+    qr = "QR an" if cfg.get("show_qr_code") else "QR aus"
+    banner = "Banner an" if cfg.get("banner_enabled") else "Banner aus"
+    if view == "Grid":
+        try:
+            cols = int(cfg.get("grid_columns") or 4)
+        except (TypeError, ValueError):
+            cols = 4
+        return f"Grid {cols} Spalten · {qr} · {banner}"
+    return f"{view} · {spawn} · {qr} · {banner}"
+
+
+def _config_from_folder(folder: Path) -> dict[str, Any]:
+    cfg_file = folder / "config.json"
+    if not cfg_file.is_file():
+        return {}
+    try:
+        with cfg_file.open(encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def _template_dir(tid: str) -> Path:
@@ -106,15 +215,18 @@ def _read_meta(folder: Path) -> dict[str, Any] | None:
     }
 
 
-def list_templates() -> list[dict[str, Any]]:
+def list_templates(*, with_summary: bool = False) -> list[dict[str, Any]]:
     ensure_catalog_dirs()
     items = []
     for folder in sorted(templates_dir().iterdir(), key=lambda p: p.name):
         if not folder.is_dir():
             continue
         meta = _read_meta(folder)
-        if meta:
-            items.append(meta)
+        if not meta:
+            continue
+        if with_summary:
+            meta["summary"] = wall_summary(_config_from_folder(folder))
+        items.append(meta)
     items.sort(key=lambda m: (m["name"].lower(), m["id"]))
     return items
 
@@ -203,6 +315,31 @@ def apply_template(paths, tid: str) -> dict[str, Any]:
                 continue
             write_imported_asset(paths, kind, item.name, item.read_bytes())
     return cfg
+
+
+def apply_wall_template(paths, tid: str) -> dict[str, Any]:
+    tpl = get_template(tid)
+    folder: Path = tpl["folder"]
+    cfg = apply_imported_config(paths, wall_keys_only(tpl["config"]))
+    src = folder / "background"
+    if src.is_dir():
+        for item in src.iterdir():
+            if item.is_file():
+                write_imported_asset(paths, "background", item.name, item.read_bytes())
+    return cfg
+
+
+def save_template_from_project(paths, name: str, description: str) -> dict[str, Any]:
+    from server.project import load_project_config
+
+    cfg = wall_keys_only(load_project_config(paths))
+    assets: list[tuple[str, str, bytes]] = []
+    bg = str(cfg.get("background_image") or "")
+    if bg and not is_shared_background(bg):
+        src = safe_join(paths.background, bg)
+        if src is not None and src.is_file():
+            assets.append(("background", src.name, src.read_bytes()))
+    return save_template(name, description, cfg, assets)
 
 
 def _safe_bg_name(original: str) -> str:

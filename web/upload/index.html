@@ -4,12 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Foto Upload</title>
+<script>
+(function(){try{var t=localStorage.getItem("pf-admin-theme");if(t==="light"||t==="dark"||t==="system")document.documentElement.setAttribute("data-theme",t);else document.documentElement.setAttribute("data-theme","system");}catch(e){document.documentElement.setAttribute("data-theme","system");}})();
+</script>
+<link rel="stylesheet" href="/static/admin-theme.css">
 <script src="/static/comment-fonts.js"></script>
 <script src="/static/simple-md.js"></script>
 <script src="/static/header.js"></script>
 <script src="/static/debug-comments.js"></script>
+<script src="/static/admin-theme.js"></script>
 <style>
-body{font-family:system-ui;background:#f5f7fb;margin:0;padding:0;text-align:center;}
+body{font-family:var(--pf-font, system-ui);background:var(--pf-bg, #f5f7fb);color:var(--pf-ink, #1b1b1b);margin:0;padding:0;text-align:center;}
 .greeting{margin:0 0 16px 0;overflow-wrap:anywhere;word-wrap:break-word;line-height:1.25;}
 .greeting h1{margin:0.12em 0;font-size:1.6em;}
 .greeting h2{margin:0.12em 0;font-size:1.25em;}
@@ -20,21 +25,22 @@ body{font-family:system-ui;background:#f5f7fb;margin:0;padding:0;text-align:cent
 .container{max-width:700px;margin:auto;padding:20px;}
 .header-wrap{display:flex;justify-content:center;align-items:center;margin-bottom:15px;overflow:hidden;}
 .header-wrap.is-rot-90{min-height:200px;}
-.header-img{max-width:100%;max-height:280px;border-radius:10px;transform-origin:center center;}
+.header-img{max-width:100%;max-height:280px;transform-origin:center center;}
 .header-wrap.is-rot-90 .header-img{max-width:280px;max-height:100%;}
-.upload-card{background:white;padding:25px;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,0.1);}
+.upload-card{background:var(--pf-elev, #fff);padding:25px;border:1px solid var(--pf-stroke, #d4d1cb);}
 #previewContainer{display:flex;flex-wrap:wrap;gap:16px;justify-content:center;margin-top:20px;}
-.preview{position:relative;width:150px;background:#fafafa;padding:10px;border-radius:10px;box-shadow:0 3px 10px rgba(0,0,0,0.08);}
-.preview img,.preview video{width:100%;border-radius:8px;display:block;}
-.comment-hint{font-size:12px;color:#c00;margin-top:16px;margin-bottom:8px;}
-.comment-count{font-size:11px;color:#888;margin-top:4px;text-align:right;}
+.preview{position:relative;width:150px;background:var(--pf-fill, #fafafa);padding:10px;border:1px solid var(--pf-stroke, #d4d1cb);}
+.preview img,.preview video{width:100%;display:block;}
+.comment-hint{font-size:12px;color:var(--pf-danger, #c00);margin-top:16px;margin-bottom:8px;}
+.comment-count{font-size:11px;color:var(--pf-faint, #888);margin-top:4px;text-align:right;}
 .removeBtn{position:absolute;top:6px;right:6px;background:#ff4b5c;color:white;border:none;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:14px;line-height:24px;padding:0;}
-textarea{width:100%;height:50px;margin-top:8px;resize:none;border-radius:6px;border:1px solid #ddd;padding:5px;font-size:13px;}
-.upload-btn{margin-top:20px;margin-right:8px;padding:12px 20px;border:none;border-radius:8px;background:#ff4b5c;color:white;font-size:16px;cursor:pointer;}
+textarea{width:100%;height:50px;margin-top:8px;resize:none;border:1px solid var(--pf-stroke, #ddd);background:var(--pf-bg, #fff);color:var(--pf-ink, #1b1b1b);padding:5px;font-size:13px;}
+.upload-btn{margin-top:20px;margin-right:8px;padding:12px 20px;border:none;background:#ff4b5c;color:white;font-size:16px;cursor:pointer;}
 .upload-btn:hover{filter:brightness(1.1);}
 .upload-btn:disabled{opacity:0.7;cursor:not-allowed;}
-#uploadProgress{margin-top:15px;font-size:14px;color:#666;overflow-wrap:anywhere;}
+#uploadProgress{margin-top:15px;font-size:14px;color:var(--pf-muted, #666);overflow-wrap:anywhere;}
 #uploadBtn{overflow-wrap:anywhere;}
+.upload-theme{display:flex;justify-content:flex-end;margin-top:16px;}
 </style>
 </head>
 <body>
@@ -55,6 +61,7 @@ textarea{width:100%;height:50px;margin-top:8px;resize:none;border-radius:6px;bor
 <div id="uploadProgress"></div>
 <button id="uploadBtn" class="upload-btn" type="button" onclick="upload()">Upload starten</button>
 </div>
+<div class="upload-theme" data-pf-theme></div>
 </div>
 <script>
 let MAX_COMMENT_LENGTH = 80;
@@ -65,7 +72,41 @@ let DEBUG_RANDOM_COMMENTS = false;
 let SHOW_UPLOAD_ETA = false;
 let SHOW_UPLOAD_SPEED = false;
 let selectedFiles = [];
+let previewUrls = [];
 let configLoaded = false;
+let lastGreetingColor = "#222222";
+const UPLOAD_CONCURRENCY = 4;
+const IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".heif"];
+const VIDEO_EXTS = [".mp4", ".mov", ".webm"];
+const IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif"];
+const VIDEO_TYPES = ["video/mp4", "video/quicktime", "video/webm"];
+
+function uploadThemeIsDark(){
+  const t = document.documentElement.getAttribute("data-theme") || "system";
+  if(t === "dark") return true;
+  if(t === "light") return false;
+  try{ return !!(window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches); }
+  catch(e){ return false; }
+}
+
+function hexLuminance(hex){
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || "").trim());
+  if(!m) return null;
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+}
+
+function applyGreetingColor(){
+  const greet = document.getElementById("greeting");
+  if(!greet) return;
+  const configured = lastGreetingColor || "#222222";
+  const lum = hexLuminance(configured);
+  const dark = uploadThemeIsDark();
+  if(lum == null){ greet.style.color = configured; return; }
+  if((dark && lum < 0.45) || (!dark && lum > 0.72)) greet.style.color = "";
+  else greet.style.color = configured;
+}
 
 function clampCommentMax(n){
   n = parseInt(n, 10);
@@ -135,7 +176,8 @@ async function loadUploadConfig(){
     const font = cfg.upload_greeting_font || "Arial";
     greet.style.textAlign = align;
     greet.style.fontFamily = (window.COMMENT_FONTS && COMMENT_FONTS.stack) ? COMMENT_FONTS.stack(font) : font;
-    greet.style.color = cfg.upload_greeting_color || "#222222";
+    lastGreetingColor = cfg.upload_greeting_color || "#222222";
+    applyGreetingColor();
     greet.style.fontSize = (cfg.upload_greeting_size || 28) + "px";
     greet.style.fontWeight = cfg.upload_greeting_bold !== false ? "bold" : "normal";
     greet.style.textDecoration = cfg.upload_greeting_underline ? "underline" : "none";
@@ -163,6 +205,10 @@ async function loadUploadConfig(){
 function heartbeat(){ fetch("/api/upload_heartbeat").catch(()=>{}); }
 loadUploadConfig().then(()=>{});
 heartbeat();
+try{
+  new MutationObserver(applyGreetingColor).observe(document.documentElement, {attributes: true, attributeFilter: ["data-theme"]});
+  if(window.matchMedia) matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyGreetingColor);
+}catch(e){}
 setInterval(heartbeat, 10000);
 setInterval(refreshUploadLimits, 4000);
 document.addEventListener("visibilitychange", () => { if(!document.hidden) refreshUploadLimits(); });
@@ -174,13 +220,33 @@ document.getElementById("cameraInput").addEventListener("change", e => handleFil
 document.getElementById("videoInput").addEventListener("change", e => handleFiles(e.target.files).catch(()=>{}));
 document.getElementById("fileInput").addEventListener("change", e => handleFiles(e.target.files).catch(()=>{}));
 
+function fileExt(file){
+  const name = String((file && file.name) || "").toLowerCase();
+  const dot = name.lastIndexOf(".");
+  return dot >= 0 ? name.slice(dot) : "";
+}
+function isImageFile(file){
+  const t = (file && file.type) || "";
+  if(t && IMAGE_TYPES.indexOf(t) >= 0) return true;
+  return IMAGE_EXTS.indexOf(fileExt(file)) >= 0;
+}
+function isVideoFile(file){
+  const t = (file && file.type) || "";
+  if(t && VIDEO_TYPES.indexOf(t) >= 0) return true;
+  return VIDEO_EXTS.indexOf(fileExt(file)) >= 0;
+}
 function isValidFile(file){
-  if(file.type.startsWith("image/")) return true;
-  if(ALLOW_VIDEOS && file.type.startsWith("video/")) return true;
+  if(isImageFile(file)) return true;
+  if(ALLOW_VIDEOS && isVideoFile(file)) return true;
   return false;
+}
+function revokePreviews(){
+  previewUrls.forEach(u => { try { URL.revokeObjectURL(u); } catch(e){} });
+  previewUrls = [];
 }
 function removeFile(index){ selectedFiles.splice(index,1); renderPreview(); }
 function renderPreview(){
+  revokePreviews();
   const hint = document.getElementById("commentHint");
   const container = document.getElementById("previewContainer");
   container.innerHTML = "";
@@ -196,14 +262,17 @@ function renderPreview(){
     remove.className = "removeBtn";
     remove.onclick = () => removeFile(index);
     div.appendChild(remove);
-    if(file.type.startsWith("image")){
+    if(isImageFile(file)){
       const img = document.createElement("img");
-      img.src = URL.createObjectURL(file);
+      const u = URL.createObjectURL(file);
+      previewUrls.push(u);
+      img.src = u;
       div.appendChild(img);
-    }
-    if(file.type.startsWith("video")){
+    } else if(isVideoFile(file)){
       const vid = document.createElement("video");
-      vid.src = URL.createObjectURL(file);
+      const u = URL.createObjectURL(file);
+      previewUrls.push(u);
+      vid.src = u;
       vid.controls = true;
       div.appendChild(vid);
     }
@@ -261,7 +330,8 @@ function uploadWithProgress(file, comment, onProgress){
       }
     });
     xhr.addEventListener("error", () => reject(new Error("Netzwerkfehler")));
-    xhr.open("POST", "/upload");
+    const dest = (typeof pfUrl === "function") ? pfUrl("/upload") : "/upload";
+    xhr.open("POST", dest);
     xhr.send(formData);
   });
 }
@@ -289,17 +359,29 @@ async function upload(){
   const btn = document.getElementById("uploadBtn");
   const progressEl = document.getElementById("uploadProgress");
   btn.disabled = true;
-  const total = selectedFiles.length;
-  const totalBytes = selectedFiles.reduce((sum, f) => sum + (f.size || 0), 0);
-  let completed = 0;
-  let completedBytes = 0;
+  const files = selectedFiles.slice();
+  const comments = files.map((_, i) => {
+    const commentField = document.getElementById("comment_" + i);
+    if(commentField) fillRandomComment(commentField);
+    return clipUploadComment(commentField ? commentField.value : "");
+  });
+  const total = files.length;
+  const totalBytes = files.reduce((sum, f) => sum + (f.size || 0), 0);
+  const loadedBytes = new Array(total).fill(0);
+  const succeeded = new Array(total).fill(false);
+  const failed = [];
+  let finished = 0;
   let lastAt = 0;
   let lastBytes = 0;
   let speedEma = 0;
-  function updateProgress(pct, loaded){
-    if(loaded == null) loaded = 0;
-    const doneBytes = completedBytes + loaded;
-    const overall = totalBytes > 0 ? Math.min(100, Math.round((doneBytes / totalBytes) * 100)) : (total > 1 ? Math.round(((completed + pct/100) / total) * 100) : pct);
+  function bytesNow(){
+    let n = 0;
+    for(let i = 0; i < total; i++) n += loadedBytes[i];
+    return n;
+  }
+  function updateProgress(){
+    const doneBytes = bytesNow();
+    const overall = totalBytes > 0 ? Math.min(100, Math.round((doneBytes / totalBytes) * 100)) : Math.round((finished / total) * 100);
     const now = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
     if(!lastAt){
       lastAt = now;
@@ -321,30 +403,50 @@ async function upload(){
     if(SHOW_UPLOAD_SPEED && speedEma > 0){
       extra += " (" + formatBitrate(speedEma) + ")";
     }
-    const text = "Wird hochgeladen... (" + overall + "%)" + extra;
+    const text = "Wird hochgeladen... " + finished + "/" + total + " (" + overall + "%)" + extra;
     progressEl.textContent = text;
     btn.textContent = text;
   }
-  try{
-    for(let i = 0; i < selectedFiles.length; i++){
-      const file = selectedFiles[i];
-      const commentField = document.getElementById("comment_" + i);
-      if(commentField) fillRandomComment(commentField);
-      const comment = clipUploadComment(commentField ? commentField.value : "");
-      await uploadWithProgress(file, comment, (pct, loaded) => updateProgress(pct, loaded));
-      completed++;
-      completedBytes += file.size || 0;
-      updateProgress(100, 0);
+  async function runOne(i){
+    try{
+      await uploadWithProgress(files[i], comments[i], (_pct, loaded) => {
+        loadedBytes[i] = loaded || 0;
+        updateProgress();
+      });
+      succeeded[i] = true;
+      loadedBytes[i] = files[i].size || loadedBytes[i];
+    }catch(err){
+      failed.push((files[i].name || "Datei") + ": " + (err && err.message ? err.message : "Unbekannter Fehler"));
+    }finally{
+      finished++;
+      updateProgress();
     }
-    btn.textContent = "Upload starten";
-    progressEl.textContent = "";
+  }
+  let next = 0;
+  async function worker(){
+    while(true){
+      const i = next++;
+      if(i >= total) return;
+      await runOne(i);
+    }
+  }
+  const nWorkers = Math.min(UPLOAD_CONCURRENCY, total);
+  await Promise.all(Array.from({length: nWorkers}, worker));
+  selectedFiles = files.filter((_, i) => !succeeded[i]);
+  renderPreview();
+  btn.textContent = "Upload starten";
+  progressEl.textContent = "";
+  if(failed.length === 0){
     alert("Upload erfolgreich");
     location.reload();
-  } catch(err){
-    btn.disabled = false;
-    btn.textContent = "Upload starten";
-    progressEl.textContent = "";
-    alert("Fehler beim Upload: " + (err.message || "Unbekannter Fehler"));
+    return;
+  }
+  btn.disabled = false;
+  const okN = total - failed.length;
+  if(okN > 0){
+    alert("Teilweise hochgeladen (" + okN + "/" + total + "). Fehlgeschlagen:\n\n" + failed.join("\n"));
+  } else {
+    alert("Fehler beim Upload:\n\n" + failed.join("\n"));
   }
 }
 </script>

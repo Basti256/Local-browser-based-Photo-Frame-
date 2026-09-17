@@ -18,8 +18,7 @@ position:relative;
 width:100%;
 max-height:300px;
 margin-top:10px;
-border:1px solid #ccc;
-border-radius:8px;
+border:1px solid var(--pf-stroke, #ccc);
 overflow:hidden;
 background:#000;
 }
@@ -51,17 +50,16 @@ width:auto;
 margin:0;
 padding:8px 14px;
 font-size:14px;
-background:#ececec;
-color:#222;
-border:1px solid #ccc;
-border-radius:6px;
+background:var(--pf-fill, #ececec);
+color:var(--pf-ink, #222);
+border:1px solid var(--pf-stroke, #ccc);
 cursor:pointer;
 }
 .bgRotate button:hover{
-background:#dbe8ff;
+background:var(--pf-help, #dbe8ff);
 }
 .bgHint{
 font-size:13px;
-color:#666;
+color:var(--pf-muted, #666);
 margin:0 0 10px 0;
 }

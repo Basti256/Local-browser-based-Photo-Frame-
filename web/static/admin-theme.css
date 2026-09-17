@@ -1,0 +1,331 @@
+/* Admin / project chrome only. Not guest Photowall /wall. */
+
+html[data-theme="light"] { color-scheme: light; }
+html[data-theme="dark"] { color-scheme: dark; }
+html[data-theme="system"],
+html:not([data-theme]) { color-scheme: light dark; }
+
+:root {
+  --pf-bg: light-dark(#f3f2ef, #121212);
+  --pf-elev: light-dark(#ffffff, #1c1c1c);
+  --pf-chrome: light-dark(#fafaf8, #181818);
+  --pf-fill: light-dark(#eceae6, #262626);
+  --pf-ink: light-dark(#1b1b1b, #f2f2f2);
+  --pf-muted: light-dark(#5a5a5a, #a3a3a3);
+  --pf-faint: light-dark(#7a7a7a, #7d7d7d);
+  --pf-stroke: light-dark(#d4d1cb, #3a3a3a);
+  --pf-stroke-strong: light-dark(#1b1b1b, #c8c8c8);
+  --pf-accent: light-dark(#1f4d7a, #8cb4d8);
+  --pf-ok: light-dark(#1a5c3a, #6aaa7a);
+  --pf-ok-fill: light-dark(#2d6a3e, #3d6b45);
+  --pf-help: light-dark(#e8eef6, #1c2630);
+  --pf-danger: light-dark(#8b1a1a, #c47a7a);
+  --pf-danger-fill: light-dark(#8b1a1a, #6b3030);
+  --pf-warn: light-dark(#8a5a12, #c4a06a);
+  --pf-shadow: light-dark(rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0.45));
+  --pf-font: "Segoe UI", system-ui, sans-serif;
+  --bg: var(--pf-bg);
+  --bg-elev: var(--pf-elev);
+  --bg-chrome: var(--pf-chrome);
+  --bg-fill: var(--pf-fill);
+  --ink: var(--pf-ink);
+  --muted: var(--pf-muted);
+  --faint: var(--pf-faint);
+  --stroke: var(--pf-stroke);
+  --stroke-strong: var(--pf-stroke-strong);
+  --accent: var(--pf-accent);
+  --ok: var(--pf-ok);
+}
+
+.pf-theme {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+body.pf-admin .pf-theme button,
+.pf-theme button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--pf-faint);
+  cursor: pointer;
+  font-size: 0;
+}
+
+body.pf-admin .pf-theme button:hover,
+.pf-theme button:hover {
+  color: var(--pf-ink);
+  border-color: var(--pf-stroke);
+}
+
+body.pf-admin .pf-theme button.is-on,
+.pf-theme button.is-on {
+  color: var(--pf-ink);
+  border-color: var(--pf-stroke-strong);
+  background: var(--pf-fill);
+}
+
+body.pf-admin .pf-theme button:focus-visible,
+.pf-theme button:focus-visible {
+  outline: 2px solid var(--pf-ink);
+  outline-offset: 2px;
+}
+
+.pf-theme svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+body.pf-admin {
+  margin: 0;
+  min-height: 100%;
+  background: var(--pf-bg);
+  color: var(--pf-ink);
+  font-family: var(--pf-font);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+body.pf-admin a {
+  color: var(--pf-accent);
+}
+
+body.pf-admin .pf-wrap {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 12px 14px 28px;
+}
+
+body.pf-admin .pf-wrap.narrow {
+  max-width: 720px;
+}
+
+body.pf-admin .pf-wrap.wide {
+  max-width: 1100px;
+}
+
+.pf-chrome {
+  border: 1px solid var(--pf-stroke-strong);
+  background: var(--pf-chrome);
+  margin-bottom: 12px;
+}
+
+.pf-chrome-top,
+.pf-chrome-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 8px 10px;
+}
+
+.pf-chrome-top {
+  border-bottom: 1px solid var(--pf-stroke);
+}
+
+.pf-chrome-title {
+  font-weight: 650;
+  font-size: 13px;
+}
+
+.pf-chrome-hint {
+  color: var(--pf-faint);
+  font-size: 11px;
+}
+
+.pf-chrome-links {
+  color: var(--pf-muted);
+  font-size: 12px;
+}
+
+.pf-chrome-links a {
+  color: var(--pf-ink);
+  text-underline-offset: 2px;
+}
+
+.pf-chrome-links .sep {
+  color: var(--pf-faint);
+}
+
+.pf-page-title {
+  margin: 0 0 8px;
+  font-size: 1.35rem;
+  font-weight: 650;
+}
+
+.pf-page-title .pf-ver {
+  font-size: 0.55em;
+  color: var(--pf-faint);
+  font-weight: 400;
+}
+
+.pf-card {
+  border: 1px solid var(--pf-stroke);
+  background: var(--pf-elev);
+  padding: 16px 18px;
+}
+
+.pf-note {
+  color: var(--pf-muted);
+  font-size: 13px;
+  font-weight: 400;
+  margin: 0 0 8px;
+}
+
+.pf-faint {
+  color: var(--pf-faint);
+  font-size: 12px;
+}
+
+.pf-box {
+  border: 1px solid var(--pf-stroke);
+  background: var(--pf-elev);
+  padding: 12px;
+  margin: 10px 0;
+}
+
+.pf-box.accent {
+  border-color: var(--pf-accent);
+}
+
+.pf-status {
+  border: 1px solid var(--pf-stroke);
+  background: var(--pf-fill);
+  padding: 16px;
+  margin-top: 20px;
+}
+
+.pf-status-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.pf-qr {
+  width: 220px;
+  height: 220px;
+  margin-top: 10px;
+  border: 1px solid var(--pf-stroke);
+  padding: 10px;
+  background: #fff;
+  border-radius: 4px;
+}
+
+.pf-mono {
+  margin-top: 10px;
+  background: var(--pf-help);
+  color: var(--pf-ink);
+  padding: 10px;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 13px;
+}
+
+.pf-net {
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid var(--pf-stroke);
+  background: var(--pf-fill);
+}
+
+body.pf-admin label {
+  font-weight: 650;
+}
+
+body.pf-admin input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]),
+body.pf-admin select,
+body.pf-admin textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 10px;
+  margin-top: 4px;
+  margin-bottom: 12px;
+  border: 1px solid var(--pf-stroke);
+  background: var(--pf-bg);
+  color: var(--pf-ink);
+  font: inherit;
+  border-radius: 0;
+}
+
+body.pf-admin input[type="color"] {
+  width: 64px;
+  height: 36px;
+  padding: 2px;
+  border: 1px solid var(--pf-stroke);
+  background: var(--pf-bg);
+}
+
+body.pf-admin input[type="file"] {
+  color: var(--pf-ink);
+}
+
+body.pf-admin input.checkbox,
+body.pf-admin input[type="checkbox"] {
+  width: auto;
+  accent-color: var(--pf-accent);
+}
+
+body.pf-admin button,
+body.pf-admin .btn {
+  display: inline-block;
+  background: var(--pf-ok-fill);
+  color: #fff;
+  border: 1px solid transparent;
+  padding: 10px 14px;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  text-decoration: none;
+  border-radius: 4px;
+}
+
+body.pf-admin button.secondary,
+body.pf-admin .btn.secondary {
+  background: var(--pf-fill);
+  color: var(--pf-ink);
+  border-color: var(--pf-stroke);
+}
+
+body.pf-admin button.danger,
+body.pf-admin .btn.danger {
+  background: var(--pf-danger-fill);
+  color: #fff;
+}
+
+body.pf-admin button:disabled,
+body.pf-admin .btn:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+body.pf-admin button:focus-visible,
+body.pf-admin a:focus-visible,
+body.pf-admin .btn:focus-visible {
+  outline: 2px solid var(--pf-ink);
+  outline-offset: 2px;
+}
+
+body.pf-admin .error {
+  color: var(--pf-danger);
+  margin: 8px 0;
+}
+
+body.pf-admin .warn {
+  color: var(--pf-warn);
+  margin: 8px 0;
+}
+
+@media (max-width: 600px) {
+  .pf-status-grid {
+    grid-template-columns: 1fr;
+  }
+}

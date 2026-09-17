@@ -1550,6 +1550,7 @@ box.innerHTML = txt
 }
 
 load()
+renderUploadQR()
 fetch("/api/version").then(r=>r.json()).then(d=>{
 let el=document.getElementById("app_version")
 if(el) el.textContent="v"+d.version

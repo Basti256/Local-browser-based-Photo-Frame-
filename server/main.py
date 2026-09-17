@@ -101,7 +101,7 @@ def service_worker():
     return service_worker_response()
 
 
-from server.routes import admin, auth_routes, media, pages, setup, upload, wall
+from server.routes import admin, auth_routes, media, pages, setup, upload, wall, wall_manager
 
 fastapi_app.include_router(auth_routes.router)
 fastapi_app.include_router(setup.router)
@@ -110,6 +110,7 @@ fastapi_app.include_router(upload.router)
 fastapi_app.include_router(wall.router)
 fastapi_app.include_router(admin.router)
 fastapi_app.include_router(media.router)
+fastapi_app.include_router(wall_manager.router)
 fastapi_app.mount("/static", StaticFiles(directory=str(WEB_DIR / "static")), name="static")
 
 app = ProjectPrefixASGI(fastapi_app)

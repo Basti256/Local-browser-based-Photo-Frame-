@@ -4,6 +4,206 @@ Alle wesentlichen Änderungen am Local-browser-based-Photo-Frame werden in diese
 
 ---
 
+## [2.27.0] – 2026-09-18
+
+### Behoben
+
+- Media-Cache: frische Dateien kommen cache-first, ohne das Original erneut zu laden. Keine 206-Teilstücke im Cache, Quota-Reserve, Eviction zuerst abgelaufen. Die Wall registriert den Service Worker unter `/{name}/sw.js`.
+- Wall Manager: erstes Playlist-Video nicht mehr schwarz (`clearStage` widerrief den Blob vor `src`; MIME am Cache-Blob). Pop lässt das Folgemedium im DOM. Photowall-Ende (`pause`/`stop`) gilt auch, wenn als Nächstes ein Effekt kommt. Wischblende hält `duration_sec` per `requestAnimationFrame`. Playhead bleibt auf Schnitt/Pop statt den Slot zu überspringen.
+- Fly/Grid: `reservedImages` nach abgebrochenem Spawn frei. Grid hat Banner und QR. Erster `__ping__` setzt online; der Service Worker gilt nicht offline, solange `/ws` noch CONNECTING ist. Erstes Bild und erstes Video spawnen sofort. Bildtexte werden vorgeladen.
+- Upload: Greeting im Dunkel-Theme lesbar. Pillow/Transcode laufen im Worker-Thread; die Gäste-UI sendet bis zu vier Dateien parallel, ein Einzelfehler stoppt den Rest nicht.
+- Admin: Upload-QR nach `load()` wieder gezeichnet. Banner-Save normalisiert CRLF. Zahlenfelder behalten 0 (`??` statt `||`). Spawn-Intervalle bleiben Float (Schritt 0,1 s).
+- Routing: `/{name}/setup`, `/{name}/login` und Control-APIs unter Prefix antworten 404 leer.
+
+### Geändert
+
+- Programm-Cache `wall-program-v1` mit eigenem Deckel (höchstens 16 Dateien, eigener Quota-Anteil). Prefetch `all` nur während Photowall, nacheinander, Stopp wenn voll. Foto-Cache `wall-media-v1` bleibt getrennt.
+- Photowall-Admin blendet bei Grid die Fly-only-Blöcke Spawn und Größe/Bewegung aus (Werte bleiben im Formular). Photowall-IA, Hell/Dunkel/System und die URLs `/admin` / `/setup` unverändert.
+
+---
+
+## [2.26.0] – 2026-09-12
+
+### Hinzugefügt
+
+- Wall Manager: Weiche Blende (`dissolve`) überblendet vorheriges und nächstes Medium über `duration_sec` ohne Schwarz. Wischblende (`wipe`) deckt per CSS-clip-path auf (Standard links nach rechts, Richtung wählbar). Plus-Menü und Seitenleiste führen beide; Zeilen bleiben schlank `{id,kind,effect,duration_sec}`.
+
+### Geändert
+
+- Wall Manager: bestehender Effekt `cut` ist ein harter Schnitt (vorheriges Medium weg, nächstes sofort) und heißt im Admin Harter Schnitt. Aus/Einblenden über Schwarz, erstes Playlist-Video und Photowall-IA unverändert. Neue Effektarten brauchen einen Prozessneustart, die Wand einen Hard-Reload.
+
+---
+
+## [2.25.1] – 2026-09-12
+
+### Behoben
+
+- Wall Manager: das erste Playlist-Video spielt wieder, wenn der Ablauf mit einem Clip beginnt. Der Playhead hat denselben Clip alle 300 ms neu eingehängt, solange auf ein dekodiertes Bild gewartet wurde (kein Fade davor, noch kein Cache). Clip startet sofort, Schwarz bleibt aus; Fade 2.23.9 unverändert.
+
+---
+
+## [2.25.0] – 2026-09-12
+
+### Hinzugefügt
+
+- Admin-Chrome Hell / Dunkel / System (Sonne, Mond, Bildschirm). Standard System bzw. zuletzt gewählt. Nur `localStorage` (`pf-admin-theme`), nicht in der Projekt-`config.json`. Die Gäste-Wand (`/wall`) bleibt unverändert.
+
+### Geändert
+
+- Projektseiten auf dieselben Tokens: `/admin` (alle Reiter, Navigation bleibt Wand / Texte / Upload / Wall Manager / System), PIN, Medienbrowser, Gäste-Upload, Attrappe `/static/setup-preview.html`. Photowall-IA (Vorlagen zuerst, Bild\|Video-Zeilen, Overlay unter Wand) unverändert. `/admin/classic` und `/setup` unangetastet. `/admin` und `/setup` tauschen die URLs nicht.
+
+---
+
+## [2.24.0] – 2026-09-12
+
+### Geändert
+
+- `/admin` Reiter Wand folgt der Photowall-IA: zuerst gespeicherte Konfigurationen (echte serverweite Vorlagen plus aktuell), dann Anzeige, Spawn, Größe/Bewegung als Bild|Video-Zeilen, Highlights/Rahmen/Cache, Overlay. Der Bilder/Video-Umschalter, der die Hälfte der Felder versteckte, entfällt. QR, Banner und Bildtext liegen unter Overlay; Texte verweist dorthin. Media-Cache steht unter Wand. `/admin` und `/setup` tauschen die URLs nicht. Classic unverändert.
+
+### Hinzugefügt
+
+- PIN-APIs `GET /api/admin/templates`, `POST /api/admin/templates` (aktuelle Wand als Vorlage) und `POST /api/admin/templates/apply`. Derselbe Speicher wie `/setup` (`data/templates`). Anwenden setzt nur Wand-Schlüssel.
+
+---
+
+## [2.23.12] – 2026-09-12
+
+### Geändert
+
+- Attrappe `/static/setup-preview.html`: Photowall beginnt mit gespeicherten Konfigurationen (Dummy-Vorlagen). Kein Bilder/Video-Schalter mehr; Felder stehen in Gruppen, Bild- und Video-Werte nebeneinander. `/admin` unverändert.
+
+---
+
+## [2.23.11] – 2026-09-12
+
+### Geändert
+
+- Klickbare Attrappe der geplanten Projekt-Einrichtung unter `/static/setup-preview.html` (ohne PIN, speichert nicht). Der laufende Prozess liefert sie aus `web/static/` ohne neue Python-Route. `/admin/preview` bleibt optional nach Neustart. `/admin` unverändert.
+
+---
+
+## [2.23.10] – 2026-09-12
+
+### Hinzugefügt
+
+- Klickbare Attrappe der geplanten Projekt-Einrichtung unter `/admin/preview` (PIN wie die lebende Admin). Speichert nichts. `/admin` bleibt die aktuelle Einstellungsseite.
+
+---
+
+## [2.23.9] – 2026-09-12
+
+### Behoben
+
+- Wall Manager: Aus/Einblenden blendet den vorherigen Clip wirklich nach Schwarz aus (schwarze Ebene über dem Video). Einblenden läuft als eine CSS-Opacity-Transition, ohne Seek oder Opacity-Sprünge alle 300 ms.
+
+---
+
+## [2.23.8] – 2026-09-12
+
+### Geändert
+
+- Wall Manager: jeder Playlist-Punkt zeigt links neben Löschen die Laufzeit (vergangen/gesamt). Über der Liste steht, wie viele Walls verbunden sind.
+
+---
+
+## [2.23.7] – 2026-09-12
+
+### Behoben
+
+- Wall Manager: Aus/Einblenden bleibt ein Effekt. Alte Saves, die daraus Photowall 12 min mit `transition: fade` gemacht haben, werden beim Laden und Speichern wieder als Effekt gelesen; echte Photowall-Zeilen (andere Dauer, Fortsetzen/Stopp) bleiben unverändert.
+
+---
+
+## [2.23.6] – 2026-09-12
+
+### Behoben
+
+- Admin-Doppelklick springt die laufende Wiedergabe: Playhead auf den gewählten Playlist-Punkt, Walls folgen (auch wenn sie zuvor lokal liefen).
+
+---
+
+## [2.23.5] – 2026-09-12
+
+### Behoben
+
+- Wall-Debug zeigte „Wall Manager: aus“, obwohl er aktiv war. Ohne Playhead-API läuft der Ablauf lokal, Debug zeigt „an“.
+
+---
+
+## [2.23.4] – 2026-09-12
+
+### Behoben
+
+- Wall blieb schwarz, wenn der Wall-Manager aktiv war, der Playhead aber fehlte: die Photowall-Timer wurden nicht gestartet.
+
+---
+
+## [2.23.3] – 2026-09-11
+
+### Geändert
+
+- Wall Manager: 200×200-Vorschau zeigt Bild und Video vollständig im Rahmen, ohne Beschnitt links/rechts.
+
+---
+
+## [2.23.2] – 2026-09-11
+
+### Behoben
+
+- Wall Manager: 200×200-Vorschau eines Videos zeigt das Video (stumm, Loop), nicht den Text „Video“.
+
+---
+
+## [2.23.1] – 2026-09-11
+
+### Geändert
+
+- Wall Manager: Dateiwahl wieder als Dropdown aller vorhandenen Dateien, daneben 200×200-Vorschau des ausgewählten Mediums (Vergrößern-Popup, Löschen).
+
+---
+
+## [2.23.0] – 2026-09-11
+
+### Behoben
+
+- Wall Manager: Speichern macht aus Aus/Einblenden kein Photowall-12-min mehr. Effekt-Zeilen werden ohne Photowall-Felder gespeichert.
+- Plus-Menü: Einträge unter Medium und Effekt sind dunkel auf weiß, nicht mehr weiß auf weiß.
+
+### Geändert
+
+- Dateiauswahl mit 200×200-Vorschau, Vergrößern öffnet das Vorschau-Popup, Löschen-Symbol entfernt die Datei.
+- Wiedergabe folgt dem Server, nicht dem einzelnen Bildschirm. In der Playlist ist der laufende Punkt blau, die Auswahl grün. Doppelklick springt alle Walls auf diesen Punkt (`POST /api/admin/wall-manager/jump`, `GET /api/wall-manager/playhead`, WS `__wm_playhead__`).
+
+---
+
+## [2.22.0] – 2026-09-11
+
+### Geändert
+
+- Wall Manager: Playlist-Editor mit Plus-Menü (Medium oder Effekt), Drag-and-drop, Einstellungen rechts, Upload und Vorschau am Eintrag.
+- Aus/Einblenden ist ein eigener Effekt (Standard 5 s je Richtung, einstellbar). Photowall kann eine einstellbare Zeit vorher unter dem Clip starten (Standard 15 s).
+
+---
+
+## [2.21.1] – 2026-09-11
+
+### Behoben
+
+- Wall-Manager-Videos und -Bilder unter `/{projekt}/wall` luden `/wm/…` ohne Projektpfad (503). `pf-base.js` stellt `/wm/` jetzt wie `/media/` um.
+
+---
+
+## [2.21.0] – 2026-09-11
+
+### Hinzugefügt
+
+- Wall Manager unter `/admin`: Playlist aus Photowall, Videos und Bildern. Clips liegen getrennt von Gäste-Uploads.
+- Photowall-Slots: Dauer, am Anfang starten oder fortsetzen, am Ende pausieren oder aus.
+- Clip-Optionen: einmal / Loop / Mehrfach, Übergänge (Nichts, Aus/Einblenden, Aufpoppen), Banner und QR je Eintrag, Mute.
+- Anzeigequalität bis 720p ohne Hochskalieren. Eigenes Vorladen und Debug für den Programm-Cache.
+
+---
+
 ## [2.20.14] – 2026-09-08
 
 ### Geändert

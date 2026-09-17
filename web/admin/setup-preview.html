@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Projekt-Einrichtung (Attrappe)</title>
+<script>
+(function(){try{var t=localStorage.getItem("pf-admin-theme");if(t==="light"||t==="dark"||t==="system")document.documentElement.setAttribute("data-theme",t);else document.documentElement.setAttribute("data-theme","system");}catch(e){document.documentElement.setAttribute("data-theme","system");}})();
+</script>
+<link rel="stylesheet" href="/static/admin-theme.css">
+<link rel="stylesheet" href="/static/setup-preview.css">
+<script src="/static/admin-theme.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <div class="banner" role="status">
+    Attrappe — speichert nicht
+    <span>Klickbare Skizze der neuen Projektseite. Die lebende Admin bleibt unter /admin.</span>
+  </div>
+
+  <header class="chrome">
+    <div class="chrome-top">
+      <span class="chrome-title">Projekt-Einrichtung</span>
+      <span class="chrome-hint">heute /admin · später /setup · Hell / Dunkel / System</span>
+      <div data-pf-theme></div>
+    </div>
+    <div class="chrome-links">
+      <button type="button" class="linkish" data-go="photowall"><span data-icon="photowall" data-size="14"></span>Wall öffnen</button>
+      <button type="button" class="linkish" data-go="upload"><span data-icon="upload" data-size="14"></span>Upload</button>
+      <button type="button" class="linkish muted" data-dummy="PIN-Sitzung bleibt — Attrappe">PIN beenden</button>
+      <span class="sep">|</span>
+      <span class="chrome-hint">Server (Master) später unter /admin</span>
+    </div>
+  </header>
+
+  <nav class="nav" aria-label="Flächen">
+    <button type="button" class="nav-btn is-on" data-nav="lage"><span data-icon="lage" data-size="14"></span>Lage</button>
+    <button type="button" class="nav-btn is-center" data-nav="ablauf"><span data-icon="ablauf" data-size="14"></span>Ablauf</button>
+    <button type="button" class="nav-btn" data-nav="photowall"><span data-icon="photowall" data-size="14"></span>Photowall</button>
+    <button type="button" class="nav-btn" data-nav="upload"><span data-icon="upload" data-size="14"></span>Upload</button>
+    <button type="button" class="nav-btn" data-nav="betrieb"><span data-icon="betrieb" data-size="14"></span>Betrieb</button>
+    <button type="button" class="nav-btn" data-nav="debug"><span data-icon="debug" data-size="14"></span>Debug</button>
+  </nav>
+
+  <section class="panel is-on" data-panel="lage" aria-label="Lage">
+    <div class="stats">
+      <div class="stat"><b>2</b><span>Walls verbunden</span></div>
+      <div class="stat"><b>an</b><span>Wall Manager</span></div>
+      <div class="stat"><b>14</b><span>Uploads heute</span></div>
+      <div class="stat"><b>wach</b><span>Bildschirm</span></div>
+    </div>
+    <div class="grid-2">
+      <button type="button" class="box accent door" data-go="ablauf">
+        <div class="row"><span data-icon="ablauf" data-size="22"></span><span class="note">Zentrum am Abend — antippen öffnet Ablauf</span></div>
+        <h2>Was läuft?</h2>
+        <p><b>Punkt 2 / 6 · Video Begrüßung</b></p>
+        <p class="note">0:42 / 1:20 · danach Photowall 12 min</p>
+        <p class="faint mt">Playlist, Playhead, Ton, Vorladen — eigene Dateien, nicht Gäste-Medien</p>
+      </button>
+      <div class="stack">
+        <button type="button" class="box door" data-go="photowall">
+          <div class="row"><span data-icon="photowall" data-size="18"></span><h2>Wie sieht die Wand aus?</h2></div>
+          <p>Fly · Hintergrund Bild</p>
+          <p class="note">QR unten · Banner aus · Bildtext an</p>
+          <p class="faint">Overlay sitzt hier, nicht bei Upload</p>
+        </button>
+        <button type="button" class="box door" data-go="upload">
+          <div class="row"><span data-icon="upload" data-size="18"></span><h2>Wie kommen Fotos rein?</h2></div>
+          <p>Upload-Seite, Limits, Videos</p>
+          <p class="note">Darin auch der Link zum Medienbrowser</p>
+          <p class="faint">Eigene Fläche — nicht in Lage oder Photowall</p>
+        </button>
+      </div>
+    </div>
+    <div class="row spread mt">
+      <span class="row faint"><span data-icon="betrieb" data-size="14"></span>Betrieb (Cache, Wachhalten) und Debug über die Leiste oben.</span>
+      <button type="button" class="linkish" data-go="betrieb"><span data-icon="betrieb" data-size="14"></span>Zu Betrieb</button>
+    </div>
+  </section>
+
+  <section class="panel" data-panel="ablauf" aria-label="Ablauf">
+    <div class="grid-2">
+      <div class="box accent tall">
+        <div class="box-h"><span data-icon="ablauf" data-size="13"></span>Playlist</div>
+        <p class="note">2 Walls verbunden · Grün = gewählt · Blau = läuft</p>
+        <div class="stack mt">
+          <button type="button" class="pl" data-pl="0">
+            <span data-icon="fade" data-size="14"></span>
+            <span>1&ensp;Aus/Einblenden&ensp;5 s</span>
+          </button>
+          <button type="button" class="pl is-run is-sel" data-pl="1">
+            <span data-icon="start" data-size="14"></span>
+            <span>2&ensp;Video&ensp;Begrüßung.mp4&ensp;0:42 / 1:20</span>
+          </button>
+          <button type="button" class="pl" data-pl="2">
+            <span data-icon="photowall" data-size="14"></span>
+            <span data-icon="pause" data-size="14"></span>
+            <span>3&ensp;Photowall&ensp;12 min · am Ende pausieren</span>
+          </button>
+          <button type="button" class="pl" data-pl="3">
+            <span data-icon="bildtext" data-size="14"></span>
+            <span>4&ensp;Bild&ensp;Danke.jpg&ensp;8 s</span>
+          </button>
+        </div>
+      </div>
+      <div class="stack">
+        <div class="box tall" id="plDetail">
+          <div class="box-h">Punkt-Einstellungen</div>
+          <div class="field"><span>Datei</span><b>Begrüßung.mp4</b></div>
+          <div class="field"><span>Dauer</span><b>1:20</b></div>
+          <div class="field"><span>Ton</span><b>an</b></div>
+          <div class="row mt">
+            <span class="row faint"><span data-icon="banner" data-size="14"></span>Banner</span>
+            <span class="row faint"><span data-icon="qr" data-size="14"></span>QR</span>
+            <span class="faint">je Eintrag</span>
+          </div>
+          <p class="faint mt">Vorschau 200×200, contain</p>
+          <div class="thumb mt" aria-hidden="true"></div>
+        </div>
+        <div class="box">
+          <div class="box-h">Programm</div>
+          <div class="field"><span>Aktiv</span><b>an</b></div>
+          <div class="field"><span>Alle Videos stumm</span><b>aus</b></div>
+          <div class="field"><span>Vorladen</span><b>nächstes</b></div>
+        </div>
+        <div class="box">
+          <div class="box-h">Photowall im Slot</div>
+          <div class="row">
+            <span class="row"><span data-icon="start" data-size="14"></span>Starten</span>
+            <span class="row"><span data-icon="pause" data-size="14"></span>Pausieren</span>
+            <span class="row"><span data-icon="fade" data-size="14"></span>Übergang</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <button type="button" class="save" data-dummy="Ablauf nicht gespeichert — Attrappe">Ablauf speichern — getrennt von Photowall-Config</button>
+  </section>
+
+  <section class="panel" data-panel="photowall" aria-label="Photowall">
+    <p class="note">Zuerst eine gespeicherte Wand wählen, danach die Felder. Bilder- und Video-Werte stehen nebeneinander — kein Schalter, der die Hälfte ausblendet.</p>
+
+    <div class="box accent mt">
+      <div class="box-h">1. Gespeicherte Konfiguration</div>
+      <p class="note">Dummy-Liste — Vorlagen-API hier nicht verdrahtet. Später: aktuelle Projekt-Config plus serverweite Vorlagen aus /setup (data/templates, nur Wand-Schlüssel).</p>
+      <div class="cfg-list mt">
+        <button type="button" class="cfg is-on" data-cfg="current">
+          <span class="cfg-k">Aktuell</span>
+          <b>Projekt test</b>
+          <span class="note">Fly · Bahnen · QR an · Banner aus</span>
+        </button>
+        <button type="button" class="cfg" data-cfg="hochzeit">
+          <span class="cfg-k">Vorlage</span>
+          <b>Hochzeit klassisch</b>
+          <span class="note">Fly · Banner an · Highlights gelb</span>
+        </button>
+        <button type="button" class="cfg" data-cfg="grid">
+          <span class="cfg-k">Vorlage</span>
+          <b>Grid kompakt</b>
+          <span class="note">Grid 4 Spalten · Porträt 90°</span>
+        </button>
+        <button type="button" class="cfg" data-cfg="sommer">
+          <span class="cfg-k">Server-Vorlage</span>
+          <b>Sommerfest</b>
+          <span class="note">Fly · Burst · Hintergrund shared</span>
+        </button>
+      </div>
+      <div class="row mt">
+        <button type="button" class="ghost" data-dummy="Vorlage nicht angewendet — Attrappe">Gewählte Vorlage anwenden</button>
+        <button type="button" class="ghost" data-dummy="Neue Vorlage nicht gespeichert — Attrappe">Aktuelle als Vorlage speichern</button>
+      </div>
+    </div>
+
+    <h3 class="sec-h">2. Anzeige</h3>
+    <div class="grid-eq">
+      <div class="box tall">
+        <div class="box-h"><span data-icon="photowall" data-size="13"></span>Ansicht und Drehung</div>
+        <div class="field"><span>Ansicht</span><b data-wf="view">Fly</b></div>
+        <div class="row mt">
+          <button type="button" class="chip is-on" data-chip="Fly" data-chip-group="view" data-wf-set="view">Fly</button>
+          <button type="button" class="chip" data-chip="Grid" data-chip-group="view" data-wf-set="view">Grid</button>
+        </div>
+        <div class="field mt"><span>Wand-Drehung</span><b data-wf="rot">0°</b></div>
+        <div class="row mt">
+          <button type="button" class="chip is-on" data-chip="0°" data-chip-group="rot" data-wf-set="rot">0°</button>
+          <button type="button" class="chip" data-chip="90°" data-chip-group="rot" data-wf-set="rot">90°</button>
+          <button type="button" class="chip" data-chip="180°" data-chip-group="rot" data-wf-set="rot">180°</button>
+          <button type="button" class="chip" data-chip="270°" data-chip-group="rot" data-wf-set="rot">270°</button>
+        </div>
+        <p class="faint mt">Horizontal 0° · Porträt 90° · gedreht 180°/270°. Gilt für Fly und Grid.</p>
+      </div>
+      <div class="box tall">
+        <div class="box-h">Hintergrund</div>
+        <div class="field"><span>Modus</span><b data-wf="bgMode">Bild</b></div>
+        <div class="field"><span>Farbe</span><b data-wf="bgColor">#000000</b></div>
+        <div class="field"><span>Bild</span><b data-wf="bgFile">shared:sommer.jpg</b></div>
+        <div class="field"><span>Position</span><b data-wf="bgPos">mittig</b></div>
+        <div class="field"><span>Größe</span><b data-wf="bgScale">100 %</b></div>
+        <div class="field"><span>Helligkeit</span><b data-wf="bgBright">100 %</b></div>
+        <div class="field"><span>Kontrast</span><b data-wf="bgContrast">100 %</b></div>
+        <div class="field"><span>Deckkraft</span><b data-wf="bgOpacity">100 %</b></div>
+        <div class="field"><span>Bild drehen</span><b data-wf="bgRot">0°</b></div>
+        <p class="faint">Originaldatei bleibt. Upload und serverweite Auswahl später wie /admin.</p>
+      </div>
+    </div>
+    <div class="box mt">
+      <div class="box-h">Grid (sichtbar, gilt bei Ansicht Grid)</div>
+      <div class="field"><span>Spalten</span><b data-wf="gridCols">4</b></div>
+      <div class="field"><span>Durchlaufzeit</span><b data-wf="gridDur">8 s</b></div>
+      <div class="field"><span>Abstand Spalten</span><b data-wf="gridGapC">20 px</b></div>
+      <div class="field"><span>Abstand Zeilen</span><b data-wf="gridGapR">0 px</b></div>
+      <div class="field"><span>Fotorahmen</span><b data-wf="gridFrames">an</b></div>
+    </div>
+
+    <h3 class="sec-h">3. Spawn / Bahnen</h3>
+    <div class="box">
+      <p class="note">Gemeinsam für Bilder und Videos. Nur Fly.</p>
+      <div class="field"><span>Spawn-Modus</span><b data-wf="spawn">Bahnen</b></div>
+      <div class="row mt">
+        <button type="button" class="chip is-on" data-chip="Bahnen" data-chip-group="spawn" data-wf-set="spawn">Bahnen</button>
+        <button type="button" class="chip" data-chip="Burst" data-chip-group="spawn" data-wf-set="spawn">Burst</button>
+        <button type="button" class="chip" data-chip="Zufall" data-chip-group="spawn" data-wf-set="spawn">Zufall</button>
+      </div>
+      <div class="field mt"><span>Anzahl Bahnen</span><b data-wf="lanes">6</b></div>
+      <div class="field"><span>Reihenfolge</span><b data-wf="laneOrder">niemals nebeneinander</b></div>
+      <div class="field"><span>Burst-Periode</span><b data-wf="burst">1 s</b></div>
+      <p class="faint">Bahnen 1–20. Reihenfolge: zufällig / niemals nebeneinander / nebeneinander. Burst: Sekunden für einmal links nach rechts.</p>
+    </div>
+
+    <h3 class="sec-h">4. Größe und Bewegung</h3>
+    <div class="box">
+      <p class="sub-h">Größe</p>
+      <div class="pair">
+        <div class="pair-h"><span>Einstellung</span><span>Bilder</span><span>Videos</span></div>
+        <div class="pair-r"><span>Intervall</span><b data-wf="imgInterval">6 s</b><b data-wf="vidInterval">10 s</b></div>
+        <div class="pair-r"><span>Max. gleichzeitig</span><b data-wf="imgMaxN">10</b><b data-wf="vidMaxN">2</b></div>
+        <div class="pair-r"><span>Min. Größe</span><b data-wf="imgMin">100 px</b><b data-wf="vidMin">100 px</b></div>
+        <div class="pair-r"><span>Max. Größe</span><b data-wf="imgMax">150 px</b><b data-wf="vidMax">150 px</b></div>
+        <div class="pair-r"><span>Abspielmodus</span><b>—</b><b data-wf="vidMode">einmal</b></div>
+      </div>
+      <p class="sub-h">Flug und Drehung</p>
+      <div class="pair">
+        <div class="pair-h"><span>Einstellung</span><span>Bilder</span><span>Videos</span></div>
+        <div class="pair-r"><span>Flugmodus</span><b data-wf="imgFlight">Random Drift</b><b data-wf="vidFlight">Random Drift</b></div>
+        <div class="pair-r"><span>Drift</span><b data-wf="imgDrift">0,2</b><b data-wf="vidDrift">0,2</b></div>
+        <div class="pair-r"><span>Rotation max.</span><b data-wf="imgRot">90°</b><b data-wf="vidRot">90°</b></div>
+        <div class="pair-r"><span>Rotation Richtung</span><b data-wf="imgRotDir">beide</b><b data-wf="vidRotDir">beide</b></div>
+      </div>
+      <p class="sub-h">Tempo</p>
+      <div class="pair">
+        <div class="pair-h"><span>Einstellung</span><span>Bilder</span><span>Videos</span></div>
+        <div class="pair-r"><span>Animationsdauer</span><b data-wf="imgDur">30 s</b><b data-wf="vidDur">30 s</b></div>
+        <div class="pair-r"><span>Speed Variation</span><b data-wf="imgVar">an</b><b data-wf="vidVar">an</b></div>
+        <div class="pair-r"><span>Speed Stärke</span><b data-wf="imgVarN">0,4</b><b data-wf="vidVarN">0,4</b></div>
+      </div>
+      <p class="faint mt">Video-Modus (einmal / Loop / Bounce) betrifft nur das Abspielen im Frame, nicht die Bahn.</p>
+    </div>
+
+    <h3 class="sec-h">5. Highlights, Rahmen, Cache</h3>
+    <div class="box">
+      <p class="sub-h">Neue Medien hervorheben</p>
+      <div class="pair">
+        <div class="pair-h"><span>Einstellung</span><span>Bilder</span><span>Videos</span></div>
+        <div class="pair-r"><span>Highlight neu</span><b data-wf="imgHl">an</b><b data-wf="vidHl">an</b></div>
+        <div class="pair-r"><span>Dauer</span><b data-wf="imgHlDur">10 s</b><b data-wf="vidHlDur">10 s</b></div>
+        <div class="pair-r"><span>Farbe</span><b data-wf="imgHlCol">#ffff00</b><b data-wf="vidHlCol">#ffff00</b></div>
+        <div class="pair-r"><span>Max. gleichzeitig</span><b data-wf="imgHlMax">3</b><b data-wf="vidHlMax">3</b></div>
+      </div>
+      <p class="sub-h">Center Highlight</p>
+      <div class="field"><span>Aktiv</span><b data-wf="centerOn">aus</b></div>
+      <div class="field"><span>Modus</span><b data-wf="centerMode">Fly Through</b></div>
+      <div class="field"><span>Größe</span><b data-wf="centerPct">30 %</b></div>
+      <div class="field"><span>Dauer</span><b data-wf="centerDur">5 s</b></div>
+      <div class="field"><span>Max. gleichzeitig</span><b data-wf="centerMax">1</b></div>
+      <div class="field"><span>Positions-Variation</span><b data-wf="centerVar">30 px</b></div>
+      <div class="field"><span>Entry / Exit</span><b data-wf="centerSpeed">1 s / 1 s</b></div>
+      <p class="sub-h">Rahmen (Polaroid, Fly und Grid)</p>
+      <div class="field"><span>Abstand oben</span><b data-wf="padTop">12 px</b></div>
+      <div class="field"><span>Abstand seitlich</span><b data-wf="padSide">12 px</b></div>
+      <div class="field"><span>Abstand unten</span><b data-wf="padBot">50 px</b></div>
+      <p class="sub-h">Media-Cache der Wall</p>
+      <div class="field"><span>Cache aktiv</span><b data-wf="cacheOn">aus</b></div>
+      <div class="field"><span>TTL</span><b data-wf="cacheTtl">30 min</b></div>
+      <div class="field"><span>Max. Bilder / Videos</span><b data-wf="cacheMax">100 / 20</b></div>
+      <div class="field"><span>Max. Größe</span><b data-wf="cacheMb">500 MB</b></div>
+      <p class="faint">Cache-Stand und Leeren bleiben unter Betrieb / Debug. Grenzen gehören zum Wand-Aussehen.</p>
+    </div>
+
+    <div class="box accent mt">
+      <div class="box-h"><span data-icon="banner" data-size="13"></span>Auf der Wand — Overlay</div>
+      <div class="grid-3">
+        <div>
+          <div class="row"><span data-icon="qr" data-size="14"></span><b>QR</b></div>
+          <div class="field"><span>Anzeigen</span><b data-wf="qrOn">an</b></div>
+          <div class="field"><span>Text</span><b data-wf="qrText">Schick uns dein Bild!</b></div>
+          <div class="field"><span>Position</span><b data-wf="qrPos">unten mittig</b></div>
+          <div class="field"><span>Größe</span><b data-wf="qrSize">220 px</b></div>
+          <div class="field"><span>Textgröße</span><b data-wf="qrTextSize">24</b></div>
+          <div class="field"><span>Textfarbe</span><b data-wf="qrColor">#db0a0a</b></div>
+          <div class="field"><span>Dynamisch</span><b data-wf="qrDyn">an</b></div>
+          <div class="field"><span>An / Pause</span><b data-wf="qrTime">5 s / 5 s</b></div>
+        </div>
+        <div>
+          <div class="row"><span data-icon="banner" data-size="14"></span><b>Banner</b></div>
+          <div class="field"><span>Aktiv</span><b data-wf="bannerOn">aus</b></div>
+          <div class="field"><span>Text</span><b data-wf="bannerText">—</b></div>
+          <div class="field"><span>Position</span><b data-wf="bannerPos">unten</b></div>
+          <div class="field"><span>Höhe</span><b data-wf="bannerH">120</b></div>
+          <div class="field"><span>Farbe / Schrift</span><b data-wf="bannerLook">#000 / #fff</b></div>
+          <div class="field"><span>Ausrichtung</span><b data-wf="bannerAlign">mitte</b></div>
+          <div class="field"><span>Schriftart</span><b data-wf="bannerFont">Arial</b></div>
+          <div class="field"><span>An / Pause</span><b data-wf="bannerTime">10 s / 10 s</b></div>
+          <p class="faint">WYSIWYG später wie /admin</p>
+        </div>
+        <div>
+          <div class="row"><span data-icon="bildtext" data-size="14"></span><b>Bildtext</b></div>
+          <div class="field"><span>Unter Fotos</span><b data-wf="commentOn">an</b></div>
+          <div class="field"><span>Farbe</span><b data-wf="commentCol">#e51515</b></div>
+          <div class="field"><span>Schriftart</span><b data-wf="commentFont">Pacifico</b></div>
+          <div class="field"><span>Größe</span><b data-wf="commentSize">22 px</b></div>
+          <div class="field"><span>Fett</span><b data-wf="commentBold">aus</b></div>
+          <div class="field"><span>Unterstrichen</span><b data-wf="commentUl">aus</b></div>
+          <p class="faint">Zeichenlimit bleibt bei Upload</p>
+        </div>
+      </div>
+    </div>
+    <button type="button" class="save" data-dummy="Photowall nicht gespeichert — Attrappe">Photowall speichern — Fly/Grid-Logik unverändert</button>
+  </section>
+
+  <section class="panel" data-panel="upload" aria-label="Upload">
+    <div class="grid-eq">
+      <div class="box tall">
+        <div class="box-h"><span data-icon="upload" data-size="13"></span>Upload-Seite</div>
+        <label class="field" for="greet"><span>Begrüßung</span></label>
+        <input class="dummy-in" id="greet" value="Schick uns dein Bild" autocomplete="off">
+        <div class="field mt"><span>Header</span><b>Projektname</b></div>
+        <p class="faint">Text in der Vorschau bearbeiten</p>
+      </div>
+      <div class="box tall">
+        <div class="box-h">Limits</div>
+        <div class="field"><span>Videos</span><b>erlaubt</b></div>
+        <div class="field"><span>Max. Dateien</span><b>20</b></div>
+        <div class="field"><span>ETA</span><b>an</b></div>
+      </div>
+    </div>
+    <button type="button" class="box door mt" data-dummy="Medienbrowser bleibt eigene Seite — Attrappe öffnet ihn nicht">
+      <div class="row">
+        <span data-icon="medien" data-size="22"></span>
+        <div>
+          <p><b>Medienbrowser öffnen</b></p>
+          <p class="note">Dateien sichten, verstecken, Batch — eigener Arbeitsplatz, Einstieg bleibt hier bei Upload.</p>
+        </div>
+      </div>
+    </button>
+    <p class="faint mt">QR zum Upload liegt auf der Photowall, nicht hier. Kein extra Chrome-Kürzel für den Medienbrowser.</p>
+    <button type="button" class="save" data-dummy="Upload-Seite nicht gespeichert — Attrappe">Upload-Seite speichern</button>
+  </section>
+
+  <section class="panel" data-panel="betrieb" aria-label="Betrieb">
+    <div class="grid-eq">
+      <div class="box tall">
+        <div class="box-h"><span data-icon="betrieb" data-size="13"></span>Status</div>
+        <div class="field"><span>Netzwerk</span><b>LAN</b></div>
+        <div class="field"><span>Bildschirm</span><b>wach</b></div>
+        <div class="field"><span>Media-Cache</span><b>14 Dateien</b></div>
+        <p class="faint">Grenzen (TTL, Max) liegen bei Photowall.</p>
+      </div>
+      <div class="box tall">
+        <div class="box-h">Alltag</div>
+        <div class="stack">
+          <button type="button" class="ghost" data-go="photowall"><span data-icon="photowall" data-size="14"></span>Wall öffnen</button>
+          <button type="button" class="ghost" data-go="upload"><span data-icon="upload" data-size="14"></span>Upload öffnen</button>
+          <p class="note">Wachhalten, Cache prüfen</p>
+        </div>
+      </div>
+    </div>
+    <p class="faint mt">Debug ist ein eigenes Zeichen (Raute), nicht das Zahnrad — eigene Fläche in der Leiste.</p>
+  </section>
+
+  <section class="panel" data-panel="debug" aria-label="Debug">
+    <div class="box muted tall">
+      <div class="box-h"><span data-icon="debug" data-size="13"></span>Debug — unten, nicht erste Fläche</div>
+      <p class="note">Overlay, Zufallstexte, Wall neu laden, Cache leeren. Nicht auf der Lage. Eigenes Zeichen (Raute), nicht das Zahnrad.</p>
+      <div class="row mt">
+        <button type="button" class="ghost" data-dummy="Overlay nicht umgeschaltet — Attrappe">Overlay</button>
+        <button type="button" class="ghost" data-dummy="Zufallstexte nicht gesetzt — Attrappe">Zufallstexte</button>
+        <button type="button" class="ghost" data-dummy="Wall nicht neu geladen — Attrappe">Wall neu laden</button>
+        <button type="button" class="ghost" data-dummy="Cache nicht geleert — Attrappe">Cache leeren</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/static/setup-preview.js"></script>
+</body>
+</html>

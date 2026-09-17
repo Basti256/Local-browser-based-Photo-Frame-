@@ -7,10 +7,9 @@ width:100%;
 min-height:80px;
 max-height:280px;
 margin-top:10px;
-border:1px solid #ccc;
-border-radius:8px;
+border:1px solid var(--pf-stroke, #ccc);
 overflow:hidden;
-background:#f5f7fb;
+background:var(--pf-fill, #f5f7fb);
 }
 .headerPreview.is-empty{
 display:none;

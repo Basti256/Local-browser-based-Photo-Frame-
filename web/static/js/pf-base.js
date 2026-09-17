@@ -6,7 +6,7 @@
   base = String(base).replace(/\/$/, "");
   global.PF_BASE = base;
 
-  var PROJECT_PATH = /^\/(wall|upload|admin|api|media|derived|header|background|ws)(\/|$)/i;
+  var PROJECT_PATH = /^\/(wall|upload|admin|api|media|derived|header|background|ws|wm)(\/|$)/i;
 
   function pathOnly(url) {
     var p = String(url || "").split("?")[0].split("#")[0];

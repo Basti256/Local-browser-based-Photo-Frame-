@@ -1,0 +1,324 @@
+#wmLayer{
+position:fixed;
+inset:0;
+z-index:2500;
+pointer-events:none;
+visibility:hidden;
+}
+#wmLayer.is-on{
+visibility:visible;
+}
+#wmBlack{
+position:absolute;
+inset:0;
+z-index:2;
+background:#000;
+opacity:0;
+pointer-events:none;
+will-change:opacity;
+transition:opacity .45s linear;
+}
+#wmStage{
+position:absolute;
+inset:0;
+z-index:1;
+display:flex;
+align-items:center;
+justify-content:center;
+overflow:hidden;
+}
+#wmStage img,
+#wmStage video{
+max-width:100%;
+max-height:100%;
+width:100%;
+height:100%;
+object-fit:contain;
+background:#000;
+}
+#wmStage.is-pop img,
+#wmStage.is-pop video{
+width:auto;
+height:auto;
+max-width:none;
+max-height:none;
+}
+#wmStage.has-overlap img,
+#wmStage.has-overlap video{
+position:absolute;
+inset:0;
+width:100%;
+height:100%;
+}
+#wmStage.has-overlap .wmIncoming,
+#wmStage.has-overlap .wmOutgoing{
+will-change:clip-path, opacity;
+}
+#wmStage .wmOutgoing{
+z-index:1;
+}
+#wmStage .wmIncoming{
+z-index:2;
+}
+#wmFrame{
+position:absolute;
+background:#fff;
+border-radius:4px;
+box-shadow:0 12px 30px rgba(0,0,0,.7);
+overflow:hidden;
+transform-origin:center center;
+}
+#wmFrame img,
+#wmFrame video{
+display:block;
+width:100%;
+height:auto;
+}
+#wmTap{
+position:absolute;
+left:50%;
+bottom:18%;
+transform:translateX(-50%);
+z-index:2600;
+display:none;
+pointer-events:auto;
+padding:10px 16px;
+border-radius:10px;
+background:rgba(0,0,0,.75);
+color:#fff;
+font:16px/1.2 system-ui, Arial, sans-serif;
+cursor:pointer;
+}
+#wmTap.is-on{
+display:block;
+}
+
+.wmHint{font-size:13px;color:var(--pf-muted, #555);margin:0 0 12px;}
+.wmMuted{font-size:13px;color:var(--pf-faint, #666);margin:8px 0;}
+.wmWarn{color:var(--pf-warn, #a60);font-weight:bold;}
+.wmToolbar{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0;}
+.wmToolbar button{width:auto;margin:0;}
+.wmChk{font-weight:normal;display:flex;align-items:center;gap:8px;margin:8px 0;}
+.wmChk input{width:auto;margin:0;}
+#wmSaveStatus{font-size:13px;margin-top:8px;}
+
+.wmEditor{
+display:grid;
+grid-template-columns:minmax(220px,1fr) minmax(240px,1fr);
+gap:16px;
+align-items:start;
+margin:12px 0;
+}
+@media (max-width:800px){
+.wmEditor{grid-template-columns:1fr;}
+}
+.wmListCol{min-width:0;}
+.wmAddWrap{position:relative;margin-bottom:8px;}
+.wmAddBtn{
+width:40px;
+height:40px;
+margin:0;
+padding:0;
+font-size:24px;
+line-height:1;
+border-radius:8px;
+}
+.wmAddMenu{
+position:absolute;
+left:0;
+top:44px;
+z-index:20;
+min-width:200px;
+background:var(--pf-elev, #fff);
+border:1px solid var(--pf-stroke, #ccc);
+border-radius:4px;
+box-shadow:0 8px 24px var(--pf-shadow, rgba(0,0,0,.15));
+padding:6px;
+}
+.wmAddMenu button{
+display:flex;
+align-items:center;
+gap:8px;
+width:100%;
+text-align:left;
+margin:0;
+background:var(--pf-elev, #fff);
+color:var(--pf-ink, #111);
+border:0;
+padding:8px 10px;
+}
+.wmFxIco{
+display:inline-flex;
+color:var(--pf-muted, #666);
+flex:0 0 14px;
+}
+.wmAddMenu button:hover{background:var(--pf-fill, #eee);color:var(--pf-ink, #111);}
+.wmAddGroup{
+font-size:11px;
+text-transform:uppercase;
+letter-spacing:.04em;
+color:var(--pf-muted, #444);
+padding:8px 10px 2px;
+}
+.wmItem{
+display:flex;
+align-items:center;
+gap:8px;
+border:1px solid var(--pf-stroke, #ddd);
+border-radius:4px;
+padding:8px 10px;
+margin:6px 0;
+background:var(--pf-fill, #fafafa);
+color:var(--pf-ink, #111);
+cursor:pointer;
+}
+.wmItem.is-on{border-color:var(--pf-ok, #4CAF50);background:color-mix(in srgb, var(--pf-ok, #4CAF50) 14%, var(--pf-elev, #fff));}
+.wmItem.is-live{border-color:var(--pf-accent, #1976d2);background:color-mix(in srgb, var(--pf-accent, #1976d2) 16%, var(--pf-elev, #fff));}
+.wmItem.is-live.is-on{border:2px solid var(--pf-ok, #4CAF50);background:color-mix(in srgb, var(--pf-accent, #1976d2) 16%, var(--pf-elev, #fff));padding:7px 9px;}
+.wmItem.is-drag{opacity:.5;}
+.wmItem.is-over{border-color:#333;}
+.wmListMeta{
+font-size:13px;
+color:var(--pf-ink, #333);
+margin:8px 0 2px;
+}
+.wmItemTime{
+font-variant-numeric:tabular-nums;
+font-size:12px;
+color:var(--pf-muted, #555);
+white-space:nowrap;
+min-width:5.6em;
+text-align:right;
+user-select:none;
+}
+.wmItem.is-live .wmItemTime{color:var(--pf-accent, #0d47a1);font-weight:600;}
+.wmGrip{color:var(--pf-faint, #999);cursor:grab;font-size:12px;letter-spacing:-2px;user-select:none;}
+.wmItemLabel{flex:1;min-width:0;}
+.wmItemRm{
+width:auto;
+margin:0;
+padding:2px 8px;
+background:var(--pf-fill, #eee);
+color:var(--pf-ink, #333);
+border:0;
+}
+.wmFileRow{
+display:flex;
+align-items:flex-start;
+gap:12px;
+margin:8px 0;
+flex-wrap:wrap;
+}
+.wmFileSelectCol{
+flex:1;
+min-width:160px;
+display:flex;
+flex-direction:column;
+gap:8px;
+}
+.wmFileSelectCol select{
+width:100%;
+margin:0;
+color:var(--pf-ink, #111);
+background:var(--pf-bg, #fff);
+}
+.wmFileCard{
+position:relative;
+width:200px;
+flex:0 0 200px;
+border:1px solid var(--pf-stroke, #ddd);
+border-radius:4px;
+background:var(--pf-elev, #fff);
+color:var(--pf-ink, #111);
+overflow:hidden;
+}
+.wmFileThumb{
+width:200px;
+height:200px;
+object-fit:contain;
+display:block;
+background:#111;
+}
+.wmFileThumbEmpty{
+width:200px;
+height:200px;
+display:flex;
+align-items:center;
+justify-content:center;
+background:var(--pf-fill, #e8e8e8);
+color:var(--pf-muted, #555);
+font-size:13px;
+}
+.wmFileZoom{
+position:absolute;
+top:6px;
+left:6px;
+z-index:2;
+width:32px;
+height:32px;
+margin:0;
+padding:0;
+border:0;
+border-radius:6px;
+background:rgba(255,255,255,.92);
+color:#111;
+line-height:1;
+display:flex;
+align-items:center;
+justify-content:center;
+}
+.wmFileZoom:hover{background:#fff;}
+.wmFileDel{
+width:auto;
+margin:0;
+padding:6px 10px;
+border:0;
+border-radius:6px;
+background:var(--pf-fill, #eee);
+color:var(--pf-ink, #111);
+font-size:14px;
+}
+.wmSide{
+border:1px solid var(--pf-stroke, #ddd);
+border-radius:4px;
+padding:12px;
+background:var(--pf-elev, #fff);
+color:var(--pf-ink, #111);
+min-height:180px;
+}
+.wmSide h3{margin:0 0 10px;font-size:16px;color:var(--pf-ink, #111);}
+.wmSide label{display:block;margin-top:8px;color:var(--pf-ink, #111);}
+.wmPreview{
+position:fixed;
+inset:0;
+z-index:2000;
+background:rgba(0,0,0,.55);
+display:flex;
+align-items:center;
+justify-content:center;
+}
+.wmPreview[hidden]{display:none !important;}
+.wmPreviewBox{
+background:#111;
+color:#fff;
+padding:16px;
+border-radius:12px;
+width:min(92vw,420px);
+}
+.wmPreviewFrame{
+width:100%;
+aspect-ratio:16/9;
+background:#000;
+overflow:hidden;
+display:flex;
+align-items:center;
+justify-content:center;
+margin:8px 0 12px;
+}
+.wmPreviewFrame img,
+.wmPreviewFrame video{
+max-width:100%;
+max-height:100%;
+object-fit:contain;
+}
+.wmPreviewBox button{width:auto;margin:0;}

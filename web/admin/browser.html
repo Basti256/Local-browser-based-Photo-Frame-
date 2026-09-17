@@ -4,22 +4,26 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Medienbrowser</title>
-<link rel="stylesheet" href="/static/ui.css">
+<script>
+(function(){try{var t=localStorage.getItem("pf-admin-theme");if(t==="light"||t==="dark"||t==="system")document.documentElement.setAttribute("data-theme",t);else document.documentElement.setAttribute("data-theme","system");}catch(e){document.documentElement.setAttribute("data-theme","system");}})();
+</script>
+<link rel="stylesheet" href="/static/admin-theme.css">
+<script src="/static/admin-theme.js"></script>
 <style>
-.wrap{max-width:1100px;}
-.actions{display:flex;flex-wrap:wrap;align-items:center;gap:0;margin:4px 0 8px;}
+.muted{color:var(--pf-muted);font-size:13px;}
+.actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:4px 0 8px;}
 .actions button,.actions .btn{margin-top:8px;}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-top:16px;}
-.tile{position:relative;background:#1c1c1c;border:1px solid #333;border-radius:8px;overflow:hidden;padding:0;text-align:left;width:100%;color:inherit;}
-.tile.selected{border-color:#8ab4ff;box-shadow:0 0 0 2px #8ab4ff;}
+.tile{position:relative;background:var(--pf-fill);border:1px solid var(--pf-stroke);overflow:hidden;padding:0;text-align:left;width:100%;color:inherit;}
+.tile.selected{border-color:var(--pf-accent);box-shadow:inset 0 0 0 1px var(--pf-accent);}
 .tile-open{display:block;width:100%;padding:0;margin:0;border:0;background:transparent;color:inherit;cursor:pointer;text-align:left;font:inherit;}
 .tile-open img,.tile-open video{width:100%;height:140px;object-fit:cover;display:block;background:#000;}
 .tile.hidden-tile{opacity:0.45;}
 .tile.hidden-tile.selected{opacity:0.85;}
-.tile .meta{padding:8px;font-size:12px;color:#aaa;}
-.tile .meta .badge{color:#ffcc80;}
-.pick{position:absolute;top:6px;left:6px;z-index:2;margin:0;padding:4px;background:rgba(0,0,0,.55);border-radius:4px;}
-.pick input{width:18px;height:18px;margin:0;padding:0;accent-color:#8ab4ff;}
+.tile .meta{padding:8px;font-size:12px;color:var(--pf-muted);}
+.tile .meta .badge{color:var(--pf-warn);}
+.pick{position:absolute;top:6px;left:6px;z-index:2;margin:0;padding:4px;background:rgba(0,0,0,.55);}
+.pick input{width:18px;height:18px;margin:0;padding:0;accent-color:var(--pf-accent);}
 .viewer{position:fixed;inset:0;background:rgba(0,0,0,.88);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:20;padding:24px;}
 .viewer:not([hidden]){display:flex;}
 .viewer img,.viewer video{max-width:100%;max-height:80vh;}
@@ -28,17 +32,28 @@
 .actions button:disabled{opacity:0.55;cursor:wait;}
 </style>
 </head>
-<body>
-<div class="wrap">
-<div class="card">
-<nav>
+<body class="pf-admin">
+<div class="pf-wrap wide">
+<header class="pf-chrome">
+<div class="pf-chrome-top">
+<span class="pf-chrome-title">Medienbrowser</span>
+<span class="pf-chrome-hint" id="proj"></span>
+<div data-pf-theme></div>
+</div>
+<div class="pf-chrome-links">
 <a href="/admin">Admin</a>
+<span class="sep">·</span>
 <a href="/setup">Einrichtung</a>
+<span class="sep">·</span>
 <a href="/wall" target="_blank">Wall</a>
+<span class="sep">·</span>
 <a href="/upload" target="_blank">Upload</a>
+<span class="sep">·</span>
 <a href="/admin/logout">PIN-Sitzung beenden</a>
-</nav>
-<h1>Medienbrowser <span class="muted" id="proj"></span></h1>
+</div>
+</header>
+<div class="pf-card">
+<h1 class="pf-page-title">Medienbrowser</h1>
 <p class="muted" id="count"></p>
 <p class="muted">Klick öffnet die Großansicht. Häkchen oder Strg+Klick markiert mehrere. Umschalt+Klick wählt einen Bereich.</p>
 <div class="actions">

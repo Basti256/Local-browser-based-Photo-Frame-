@@ -10,7 +10,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from server.context import get_current_project
-from server.defaults import DEFAULT_CONFIG, migrate_config
+from server.defaults import DEFAULT_CONFIG, apply_incoming_values, migrate_config
 from server.paths import PROJECTS_DIR
 from server.runtime import load_runtime, update_runtime
 from server.slugs import is_reserved_segment
@@ -35,6 +35,8 @@ class ProjectPaths:
         self.header = self.root / "header"
         self.background = self.root / "background"
         self.derived = self.root / "derived"
+        self.wall_manager = self.root / "wall_manager"
+        self.wall_manager_derived = self.root / "wall_manager_derived"
         self.access_file = self.root / "access.json"
 
     def _storage_config(self) -> dict[str, Any]:
@@ -61,7 +63,7 @@ class ProjectPaths:
         return self.root / "media"
 
     def ensure(self) -> None:
-        for folder in (self.root, self.header, self.background, self.derived):
+        for folder in (self.root, self.header, self.background, self.derived, self.wall_manager, self.wall_manager_derived):
             folder.mkdir(parents=True, exist_ok=True)
         try:
             self.media.mkdir(parents=True, exist_ok=True)
@@ -126,26 +128,7 @@ def apply_imported_config(paths: ProjectPaths, incoming: dict[str, Any]) -> dict
     cfg = load_project_config(paths)
     if not isinstance(incoming, dict):
         raise HTTPException(status_code=400, detail="Keine gültige Config.")
-    for key, default in DEFAULT_CONFIG.items():
-        if key not in incoming or key in SETUP_OWNED_KEYS:
-            continue
-        value = incoming[key]
-        if isinstance(default, bool):
-            cfg[key] = bool(value)
-        elif isinstance(default, int) and not isinstance(default, bool):
-            try:
-                cfg[key] = int(value)
-            except (TypeError, ValueError):
-                continue
-        elif isinstance(default, float):
-            try:
-                cfg[key] = float(value)
-            except (TypeError, ValueError):
-                continue
-        elif isinstance(default, str):
-            cfg[key] = "" if value is None else str(value)
-        else:
-            cfg[key] = value
+    apply_incoming_values(cfg, incoming, SETUP_OWNED_KEYS)
     cfg, _ = migrate_config(cfg)
     save_project_config(paths, cfg)
     return cfg
@@ -294,26 +277,7 @@ def merge_project_config(incoming: dict[str, Any]) -> tuple[dict[str, Any], bool
     current = load_project_config(paths)
     old_view = current.get("wall_view_mode")
     merged = current.copy()
-    for key, default in DEFAULT_CONFIG.items():
-        if key not in incoming or key in SETUP_OWNED_KEYS:
-            continue
-        value = incoming[key]
-        if isinstance(default, bool):
-            merged[key] = bool(value)
-        elif isinstance(default, int) and not isinstance(default, bool):
-            try:
-                merged[key] = int(value)
-            except (TypeError, ValueError):
-                continue
-        elif isinstance(default, float):
-            try:
-                merged[key] = float(value)
-            except (TypeError, ValueError):
-                continue
-        elif isinstance(default, str):
-            merged[key] = "" if value is None else str(value)
-        else:
-            merged[key] = value
+    apply_incoming_values(merged, incoming, SETUP_OWNED_KEYS)
     view_changed = old_view != merged.get("wall_view_mode")
     save_project_config(paths, merged)
     return merged, view_changed

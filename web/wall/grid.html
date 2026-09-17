@@ -101,17 +101,62 @@ line-height:1.2;
 z-index:5;
 }
 
+#qrContainer{
+position:absolute;
+z-index:3000;
+padding:14px;
+background:rgba(0,0,0,0.55);
+border-radius:12px;
+text-align:center;
+opacity:1;
+transition:opacity 1s ease;
+}
+
+#banner{
+position:absolute;
+left:0;
+right:0;
+display:flex;
+align-items:center;
+justify-content:center;
+z-index:3000;
+opacity:0;
+transition:opacity 1s ease;
+white-space:pre-wrap;
+overflow:hidden;
+}
+
+.bannerContent{
+display:flex;
+flex-direction:column;
+align-items:center;
+justify-content:center;
+text-align:center;
+width:100%;
+padding:0 12px;
+box-sizing:border-box;
+overflow:hidden;
+}
+
 .gridCellSpacer{
 display:block;
 width:100%;
 flex-shrink:0;
 }
 </style>
+<link rel="stylesheet" href="/static/banner.css">
 <link rel="stylesheet" href="/static/background.css">
 <link rel="stylesheet" href="/static/wall-rotate.css">
+<link rel="stylesheet" href="/static/wall-manager.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="/static/simple-md.js"></script>
+<script src="/static/banner-fit.js"></script>
 <script src="/static/background.js"></script>
 <script src="/static/comments.js"></script>
+<script src="/static/comment-fonts.js"></script>
 <script src="/static/wall-rotate.js"></script>
+<script src="/static/wall-manager.js"></script>
 </head>
 
 <body>
@@ -120,6 +165,13 @@ flex-shrink:0;
 <div id="debugOverlay"></div>
 
 <div id="wallBackground" aria-hidden="true"><img alt=""></div>
+
+<div id="banner"></div>
+
+<div id="qrContainer">
+<div id="qrCode"></div>
+<div id="qrText"></div>
+</div>
 
 <div id="gridContainer"></div>
 
@@ -144,12 +196,15 @@ let altWakeLockCanvas=null
 let altWakeLockActive=false
 let altWakeLockTick=null
 let cachedImages=new Set()
-let cacheInventory={images:0,videos:0,bytes:0}
+let cacheInventory={images:0,videos:0,bytes:0,quota:0,usage:0}
 let cacheInventoryBusy=false
 let mediaListLoaded=false
+let photowallPaused=false
 let catchUpBusy=false
 let lastBroadcastState=null
 let connectionFadeTimer=null
+let qrTimer=null
+let bannerTimer=null
 
 function fmtCacheBytes(n){
 n=Number(n)||0
@@ -157,6 +212,23 @@ if(n<1024) return n+" B"
 if(n<1048576) return (n/1024).toFixed(1)+" KB"
 if(n<1073741824) return (n/1048576).toFixed(1)+" MB"
 return (n/1073741824).toFixed(2)+" GB"
+}
+function revokeBlobUrl(url){
+if(!url) return
+url=String(url)
+if(url.indexOf("blob:")===0){
+try{ URL.revokeObjectURL(url) }catch(e){}
+}
+}
+function revokeElMedia(el){
+if(!el) return
+revokeBlobUrl(el.getAttribute("src")||el.src||"")
+try{ el.removeAttribute("src"); el.src="" }catch(e){}
+}
+function dropCell(cell){
+if(!cell) return
+cell.querySelectorAll("img,video").forEach(revokeElMedia)
+try{ cell.remove() }catch(e){}
 }
 function cacheNameFromUrl(url){
 return (String(url||"").split("/").pop()||"").split("?")[0]
@@ -190,10 +262,15 @@ let fn=(file||"").split("?")[0]
 if(!fn||!("caches" in window)) return null
 try{
 let cache=await caches.open("wall-media-v1")
+let direct=mediaSrc(fn)
+let res=await cache.match(direct)
+if(res) return res
+res=await cache.match(new Request(direct))
+if(res) return res
 let keys=await cache.keys()
 for(let req of keys){
 if(cacheNameFromUrl(req.url)!==fn) continue
-let res=await cache.match(req)
+res=await cache.match(req)
 if(res) return res
 }
 }catch(e){}
@@ -203,7 +280,10 @@ function wsIsOpen(){
 return !!(ws && ws.readyState===WebSocket.OPEN)
 }
 function useCachePool(){
-return !!(config&&config.cache_enabled&&!wsIsOpen())
+if(!(config&&config.cache_enabled)) return false
+if(wsIsOpen()) return false
+if(ws && ws.readyState===WebSocket.CONNECTING) return false
+return true
 }
 async function fillMediaSrc(element, file){
 if(useCachePool()){
@@ -225,7 +305,7 @@ await caches.delete("wall-media-v1")
 await caches.delete("wall-media-meta-v1")
 }catch(e){}
 cachedImages=new Set()
-cacheInventory={images:0,videos:0,bytes:0}
+cacheInventory={images:0,videos:0,bytes:0,quota:cacheInventory.quota||0,usage:0}
 addDebugLog("Cache geleert")
 if(typeof updateDebug==="function") updateDebug()
 }
@@ -252,14 +332,22 @@ try{ let j=await m.json(); sz=Number(j.s)||0 }catch(e){}
 if(!sz){
 try{
 let res=await cache.match(req)
-if(res){ let b=await res.blob(); sz=b.size||0 }
+if(res) sz=Number(res.headers.get("Content-Length"))||0
 }catch(e){}
 }
 bytes+=sz
 }
 cachedImages=next
 if(!wsIsOpen()) next.forEach(ingestCachedFilename)
-cacheInventory={images:img,videos:vid,bytes:bytes}
+let quota=0, usage=0
+try{
+if(navigator.storage&&navigator.storage.estimate){
+let est=await navigator.storage.estimate()
+quota=Number(est.quota)||0
+usage=Number(est.usage)||0
+}
+}catch(e){}
+cacheInventory={images:img,videos:vid,bytes:bytes,quota:quota,usage:usage}
 }catch(e){}
 cacheInventoryBusy=false
 }
@@ -272,7 +360,7 @@ lastWsRx=Date.now()
 function notifyServerState(state){
 if(!config||!config.cache_enabled) return
 if(!serverStateChannel) serverStateChannel=new BroadcastChannel("wall-server-state")
-if(state!=="offline" && lastBroadcastState===state) return
+if(lastBroadcastState===state) return
 lastBroadcastState=state
 serverStateChannel.postMessage({state:state})
 }
@@ -297,6 +385,7 @@ connectionFadeTimer=null
 if(serverOnline) icon.style.opacity=0
 },5000)
 catchUpMedia()
+if(!photowallPaused && window.pfPhotowall && pfPhotowall.startTimers) pfPhotowall.startTimers()
 }else{
 icon.style.transition="none"
 icon.style.background="red"
@@ -310,7 +399,14 @@ notifyServerState(state)
 if(typeof updateDebug==="function") updateDebug()
 }
 
+function waitingForFirstPing(){
+if(!ws) return false
+if(ws.readyState===WebSocket.CONNECTING) return true
+return ws.readyState===WebSocket.OPEN && lastWsRx===0
+}
+
 async function connectionWatchdog(){
+if(waitingForFirstPing() && !serverOnline) return
 let httpOk=false
 try{
 let ctrl=new AbortController()
@@ -322,6 +418,7 @@ httpOk=!!res.ok
 let wsOk=ws && ws.readyState===WebSocket.OPEN
 let wsFresh=wsOk && lastWsRx>0 && (Date.now()-lastWsRx)<15000
 if(httpOk && wsFresh) setConnection("online")
+else if(waitingForFirstPing() && !serverOnline) return
 else {
 if(serverOnline && wsOk){
 try{ ws.close() }catch(e){}
@@ -372,8 +469,9 @@ box.innerHTML=
 "Durchlaufzeit: "+duration+"s<br>"+
 "Pool: "+images.length+" (Wiederholung erlaubt)<br>"+
 "Verbindung: "+(wsIsOpen()?"verbunden":"getrennt")+"<br>"+
-"Cache: "+cacheOn+(config.cache_enabled?" (TTL "+cacheTtl+"min, max "+(config.cache_max_images||100)+" Bilder)":"")+"<br>"+
-"Browser-Cache: "+cacheInventory.images+" Bilder, "+cacheInventory.videos+" Videos, "+fmtCacheBytes(cacheInventory.bytes)+" (nur schon angezeigte Dateien)<br>"+
+"Cache: "+cacheOn+(config.cache_enabled?" (TTL "+cacheTtl+"min, max "+(config.cache_max_images||100)+" Bilder / "+(config.cache_max_videos||20)+" Videos / "+(config.cache_max_size_mb??500)+" MB)":"")+"<br>"+
+"Browser-Cache: "+cacheInventory.images+" Bilder, "+cacheInventory.videos+" Videos, "+fmtCacheBytes(cacheInventory.bytes)+(cacheInventory.quota?" · Quota "+fmtCacheBytes(cacheInventory.usage)+"/"+fmtCacheBytes(cacheInventory.quota):"")+" (nur schon angezeigte Dateien)<br>"+
+((window.pfWallManager&&pfWallManager.debugLine)?(pfWallManager.debugLine()+"<br>"):"")+
 "Bildschirm wach: "+wakeLockStatus
 if(debugLogs.length){
 box.innerHTML+="<br>Log:<br>"+debugLogs.join("<br>")
@@ -393,7 +491,11 @@ reconnectTimeout=null
 connectWebSocket()
 },3000)
 }
-ws.onerror=()=>{ setConnection("offline") }
+ws.onerror=()=>{
+if(ws && ws.readyState===WebSocket.CONNECTING) return
+if(!serverOnline) return
+setConnection("offline")
+}
 
 function sendStats(){
 if(ws&&ws.readyState===WebSocket.OPEN){
@@ -451,7 +553,7 @@ addDebugLog("Cache-Liste: "+list.length+" Bilder verfügbar")
 ws.onmessage=async(event)=>{
 markWsAlive()
 if(event.data==="__ping__"){
-if(!serverOnline) connectionWatchdog()
+setConnection("online")
 return
 }
 if(event.data==="__config_reload__"){ location.reload(); return }
@@ -461,8 +563,18 @@ let r=await fetch("/api/config"); config=await r.json()
 if(window.applyWallDisplayRotation) applyWallDisplayRotation(config)
 applyBackground()
 loadCommentFont()
+setupQR()
+setupBanner()
 applyWakeLock()
 await updateCacheSw()
+return
+}
+if(event.data==="__wall_manager_updated__"){
+if(window.pfWallManager&&pfWallManager.reload) pfWallManager.reload()
+return
+}
+if(event.data==="__wm_playhead__"){
+if(window.pfWallManager&&pfWallManager.sync) pfWallManager.sync()
 return
 }
 if(typeof event.data==="string" && event.data.indexOf("__hide__:")===0){
@@ -518,9 +630,7 @@ images=images.filter(f=>f!==file)
 reservedImages.delete(file)
 document.querySelectorAll(".gridCell").forEach(cell=>{
 if((cell.dataset.file||"").split("?")[0]!==file) return
-let img=cell.querySelector("img")
-if(img){ img.removeAttribute("src"); img.src="" }
-cell.remove()
+dropCell(cell)
 })
 addDebugLog("hidden from wall: "+file)
 }
@@ -536,14 +646,16 @@ if(config.cache_enabled&&useCachePool()){
 pool=cachedFilenames("image")
 if(pool.length===0) return null
 }else if(images.length===0) return null
-let available=pool.filter(f=>!displayed.has(f)&&!reservedImages.has(f))
-if(available.length===0) return null
-let chosen=available[Math.floor(Math.random()*available.length)]
+let unused=pool.filter(f=>!displayed.has(f)&&!reservedImages.has(f))
+let pickFrom=unused.length?unused:pool
+if(!pickFrom.length) return null
+let chosen=pickFrom[Math.floor(Math.random()*pickFrom.length)]
 reservedImages.add(chosen)
 return chosen
 }
 
 function spawnImage(colIndex,spawnTop){
+if(photowallPaused) return
 let file=chooseRandomImage()
 if(!file) return
 
@@ -619,11 +731,22 @@ let spawnTime=Date.now()
 function startAnimation(){
 let loadDelay=Date.now()-spawnTime
 let startTime=Date.now()-loadDelay
+let pauseAccum=0
+let pausedAt=null
 
 function animate(){
 if(!document.body.contains(cell)) return
+if(photowallPaused){
+if(!pausedAt) pausedAt=Date.now()
+requestAnimationFrame(animate)
+return
+}
+if(pausedAt){
+pauseAccum+=Date.now()-pausedAt
+pausedAt=null
+}
 
-let elapsed=(Date.now()-startTime)/1000
+let elapsed=(Date.now()-startTime-pauseAccum)/1000
 let y=startY-speedPxPerSec*elapsed
 cell.style.top=y+"px"
 
@@ -639,13 +762,17 @@ requestAnimationFrame(animate)
 function startExitWatcher(){
 function check(){
 if(!document.body.contains(cell)) return
+if(photowallPaused){
+requestAnimationFrame(check)
+return
+}
 
 let rect=wallClientRect(cell)
 let col=parseInt(cell.dataset.colIndex,10)
 
 if(rect.bottom<-50){
 reservedImages.delete(file)
-cell.remove()
+dropCell(cell)
 addDebugLog("removed col "+col+" after leaving: "+file+" rect="+JSON.stringify({
 top:Math.round(rect.top),
 bottom:Math.round(rect.bottom),
@@ -693,7 +820,7 @@ return
 }
 let col=parseInt(cell.dataset.colIndex,10)
 reservedImages.delete(file)
-cell.remove()
+dropCell(cell)
 addDebugLog("removed (load error) col "+col+": "+file)
 if(config&&config.cache_enabled) setConnection("offline")
 let spacingRow="grid_spacing_rows"in config?Math.max(0,parseInt(config.grid_spacing_rows)||0):(config.grid_spacing!=null?Math.max(0,parseInt(config.grid_spacing)||0):0)
@@ -710,7 +837,7 @@ void fillMediaSrc(img, file).then(ok=>{
 if(!ok){
 let col=parseInt(cell.dataset.colIndex,10)
 reservedImages.delete(file)
-cell.remove()
+dropCell(cell)
 addDebugLog("nicht im Cache col "+col+": "+file)
 spawnImage(col,spawnTop)
 return
@@ -722,11 +849,12 @@ if(img.complete && img.naturalWidth>0) startShown()
 async function updateCacheSw(){
 if(config.cache_enabled&&"serviceWorker"in navigator){
 try{
-await navigator.serviceWorker.register("/sw.js?t="+Date.now(),{scope:"/"})
+let swUrl=(typeof pfUrl==="function"?pfUrl("/sw.js"):"/sw.js")+"?t="+Date.now()
+let swScope=(typeof PF_BASE==="string" && PF_BASE)?(String(PF_BASE).replace(/\/$/,"")+"/"):"/"
+await navigator.serviceWorker.register(swUrl,{scope:swScope})
 addDebugLog("Cache SW registriert (TTL "+ (config.cache_ttl_minutes||30) +"min)")
 console.log("[WALL GRID] Cache SW registriert")
-lastBroadcastState=null
-notifyServerState(serverOnline?"online":"offline")
+notifyServerState("online")
 await refreshCacheInventory()
 }catch(e){ addDebugLog("Cache SW Fehler: "+e.message); console.error("[WALL GRID] Cache SW:",e) }
 }else if("serviceWorker"in navigator){
@@ -813,6 +941,11 @@ applyWallBackground(document.getElementById("wallBackground"), config)
 }
 
 function loadCommentFont(){
+if(window.COMMENT_FONTS && COMMENT_FONTS.loadOne){
+COMMENT_FONTS.loadOne(config.comment_font, "commentFontLink")
+COMMENT_FONTS.loadOne(config.banner_font, "bannerFontLink")
+return
+}
 let old=document.getElementById("commentFontLink")
 if(old) old.remove()
 let font=config.comment_font
@@ -824,6 +957,111 @@ link.href="https://fonts.googleapis.com/css2?family="+encodeURIComponent(font).r
 document.head.appendChild(link)
 }
 
+function setupQR(){
+let box=document.getElementById("qrContainer")
+if(!box) return
+if(!config.show_qr_code){
+box.style.display="none"
+return
+}
+box.style.display="block"
+fetch("/api/upload_url")
+.then(r=>r.json())
+.then(data=>{
+let qrBox=document.getElementById("qrCode")
+if(!qrBox) return
+qrBox.innerHTML=""
+if(typeof QRCode==="function"){
+new QRCode(qrBox,{
+text:data.url,
+width:config.qr_size,
+height:config.qr_size
+})
+}
+})
+let text=document.getElementById("qrText")
+if(text){
+text.innerText=config.qr_text
+text.style.color=config.qr_text_color
+text.style.fontSize=config.qr_text_size+"px"
+}
+setQRPosition()
+if(config.qr_dynamic_enabled) cycleQR()
+}
+
+function setQRPosition(){
+let box=document.getElementById("qrContainer")
+if(!box) return
+let p=config.qr_position
+box.style.top=""
+box.style.bottom=""
+box.style.left=""
+box.style.right=""
+box.style.transform=""
+if(p==="center-bottom"){
+box.style.left="50%"
+box.style.bottom="20px"
+box.style.transform="translateX(-50%)"
+}
+if(p==="top-left"){ box.style.top="20px"; box.style.left="20px" }
+if(p==="top-right"){ box.style.top="20px"; box.style.right="20px" }
+if(p==="bottom-left"){ box.style.bottom="20px"; box.style.left="20px" }
+if(p==="bottom-right"){ box.style.bottom="20px"; box.style.right="20px" }
+}
+
+function cycleQR(){
+let box=document.getElementById("qrContainer")
+if(!box) return
+if(qrTimer) clearInterval(qrTimer)
+qrTimer=setInterval(()=>{
+let elapsed=(Date.now()-wallStartTime)/1000
+let cycle=(config.qr_show_duration||5)+(config.qr_hide_duration||5)
+let phase=elapsed%cycle
+box.style.opacity=phase<(config.qr_show_duration||5)?1:0
+},500)
+}
+
+function setupBanner(){
+let banner=document.getElementById("banner")
+if(!banner) return
+if(!config.banner_enabled){
+banner.style.display="none"
+return
+}
+banner.style.display="flex"
+banner.style.background=config.banner_color
+banner.style.color=config.banner_text_color
+banner.style.height=config.banner_height+"px"
+banner.style.setProperty("--banner-h",(config.banner_height||120)+"px")
+let align=(window.COMMENT_FONTS&&COMMENT_FONTS.align)?COMMENT_FONTS.align(config.banner_align):"center"
+banner.style.justifyContent=align==="left"?"flex-start":align==="right"?"flex-end":"center"
+let bannerFont=config.banner_font||"Arial"
+banner.style.fontFamily=(window.COMMENT_FONTS&&COMMENT_FONTS.stack)?COMMENT_FONTS.stack(bannerFont):bannerFont
+banner.innerHTML="<div class='bannerContent is-"+align+"'>"+((window.simpleMd&&simpleMd.mdToHtml)?simpleMd.mdToHtml(config.banner_text):((window.marked&&marked.parse)?marked.parse(config.banner_text||""):(config.banner_text||"")))+"</div>"
+if(config.banner_position==="top") banner.style.top=0
+if(config.banner_position==="bottom") banner.style.bottom=0
+if(window.fitBannerText) fitBannerText(banner, banner.querySelector(".bannerContent"))
+cycleBanner()
+}
+
+function cycleBanner(){
+let banner=document.getElementById("banner")
+if(!banner) return
+if(bannerTimer) clearInterval(bannerTimer)
+bannerTimer=setInterval(()=>{
+let elapsed=(Date.now()-wallStartTime)/1000
+let cycle=(config.banner_show_duration||10)+(config.banner_hide_duration||10)
+let phase=elapsed%cycle
+banner.style.opacity=phase<(config.banner_show_duration||10)?1:0
+},500)
+}
+
+window.addEventListener("resize", function(){
+let banner=document.getElementById("banner")
+if(!banner || banner.style.display==="none") return
+if(window.fitBannerText) fitBannerText(banner, banner.querySelector(".bannerContent"))
+})
+
 async function init(){
 connectWebSocket()
 connectionWatchdog()
@@ -834,7 +1072,9 @@ if(window.applyWallDisplayRotation) applyWallDisplayRotation(config)
 
 applyBackground()
 loadCommentFont()
-if(config.cache_enabled&&ws) setConnection(ws.readyState===WebSocket.OPEN?"online":"offline")
+setupQR()
+setupBanner()
+if(config.cache_enabled && wsIsOpen()) setConnection("online")
 updateDebug()
 await updateCacheSw()
 
@@ -844,16 +1084,21 @@ if(!Array.isArray(files)) files=[]
 
 for(let f of files) addMedia(f)
 mediaListLoaded=true
+if(window.prefetchPhotoComments) prefetchPhotoComments(files)
 
 setInterval(updateDebug,500)
 
 let cols=Math.max(1,parseInt(config.grid_columns)||4)
 
 function checkSpawnNextRow(){
+if(photowallPaused) return
 let spacingRow="grid_spacing_rows"in config?Math.max(0,parseInt(config.grid_spacing_rows)||0):(config.grid_spacing!=null?Math.max(0,parseInt(config.grid_spacing)||0):0)
 for(let col=0;col<cols;col++){
 let cellsInCol=Array.from(document.querySelectorAll(".gridCell")).filter(c=>parseInt(c.dataset.colIndex,10)===col)
-if(cellsInCol.length===0) continue
+if(cellsInCol.length===0){
+spawnImage(col)
+continue
+}
 let bottomMost=null
 let maxBottom=-Infinity
 for(let c of cellsInCol){
@@ -870,9 +1115,33 @@ spawnImage(col,spawnTop)
 }
 setInterval(checkSpawnNextRow,300)
 
-for(let c=0;c<cols;c++){
-spawnImage(c)
+function startGridPhotowall(){
+photowallPaused=false
+cols=Math.max(1,parseInt(config.grid_columns)||4)
+if(!document.querySelector(".gridCell")){
+for(let c=0;c<cols;c++) spawnImage(c)
 }
+}
+
+function restartGridPhotowall(){
+document.querySelectorAll(".gridCell").forEach(c=>dropCell(c))
+reservedImages.clear()
+photowallPaused=false
+cols=Math.max(1,parseInt(config.grid_columns)||4)
+for(let c=0;c<cols;c++) spawnImage(c)
+}
+
+window.pfPhotowall={
+pause:function(){ photowallPaused=true },
+resume:function(){ photowallPaused=false },
+start:restartGridPhotowall,
+clear:function(){ document.querySelectorAll(".gridCell").forEach(c=>dropCell(c)); reservedImages.clear() },
+startTimers:startGridPhotowall,
+isPaused:function(){ return photowallPaused }
+}
+
+if(window.pfWallManager&&pfWallManager.boot) await pfWallManager.boot()
+else startGridPhotowall()
 }
 
 init()
